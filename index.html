@@ -10,10 +10,10 @@
     signInWithEmailAndPassword
   } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
   import {
-    getFirestore,
+    initializeFirestore,
     doc,
-    getDoc,
-    setDoc
+    setDoc,
+    getDoc
   } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
   // === Конфигурация Firebase ===
@@ -26,18 +26,22 @@
     appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
+  // === Инициализация Firebase ===
   const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
 
-  // === Регистрация ===
+  // 🚀 Главное исправление: отключаем “Listen” потоки
+  const db = initializeFirestore(app, { useFetchStreams: false });
+
+  const auth = getAuth(app);
+
+  // === Регистрация пользователя ===
   async function doRegister() {
-    const username = document.getElementById("regUsername").value.trim();
-    const password = document.getElementById("regPassword").value.trim();
+    const username = document.getElementById('regUsername').value.trim();
+    const password = document.getElementById('regPassword').value.trim();
     const t = translations[currentLanguage];
 
     if (!username || !password) {
-      showMsg("registerMsg", t.enterUsernamePassword, false);
+      showMsg('registerMsg', t.enterUsernamePassword, false);
       return;
     }
 
@@ -49,28 +53,29 @@
         count: 0,
         money: 0,
         level: 0,
+        achievements: [],
         createdAt: new Date().toISOString()
       });
-      showMsg("registerMsg", t.registrationSuccess, true);
+      showMsg('registerMsg', t.registrationSuccess, true);
       showLogin();
-    } catch (e) {
-      showMsg("registerMsg", e.message, false);
-      console.error(e);
+    } catch (error) {
+      showMsg('registerMsg', error.message, false);
+      console.error(error);
     }
   }
 
-  // === Вход ===
+  // === Вход пользователя ===
   async function doLogin() {
-    const username = document.getElementById("loginUsername").value.trim();
-    const password = document.getElementById("loginPassword").value.trim();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
     const t = translations[currentLanguage];
-    const email = `${username}@clicker.com`;
 
     if (!username || !password) {
-      showMsg("loginMsg", t.enterUsernamePassword, false);
+      showMsg('loginMsg', t.enterUsernamePassword, false);
       return;
     }
 
+    const email = `${username}@clicker.com`;
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, "users", userCred.user.uid));
@@ -81,14 +86,14 @@
         count = data.count || 0;
         money = data.money || 0;
         internal_level = data.level || 0;
-        showMsg("loginMsg", t.loginSuccess, true);
+        showMsg('loginMsg', t.loginSuccess, true);
         setTimeout(showLoading, 800);
       } else {
-        showMsg("loginMsg", t.userNotFound, false);
+        showMsg('loginMsg', t.userNotFound, false);
       }
-    } catch (e) {
-      showMsg("loginMsg", e.message, false);
-      console.error(e);
+    } catch (error) {
+      showMsg('loginMsg', error.message, false);
+      console.error(error);
     }
   }
 
@@ -100,22 +105,24 @@
     const user = auth.currentUser;
     if (user) {
       try {
-        await setDoc(
-          doc(db, "users", user.uid),
-          { username: currentUsername, count, money, level: internal_level },
-          { merge: true }
-        );
-      } catch (e) {
-        console.error("Ошибка сохранения:", e);
+        await setDoc(doc(db, "users", user.uid), {
+          username: currentUsername,
+          count,
+          money,
+          level: internal_level
+        }, { merge: true });
+      } catch (error) {
+        console.error("Ошибка сохранения:", error);
       }
     }
   }
 
-  // === Экспорт для HTML ===
+  // === Делаем функции доступными ===
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
 </script>
+
 
   <style>
     html, body {
