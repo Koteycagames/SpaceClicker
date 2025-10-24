@@ -1571,28 +1571,27 @@ async function showGame() {
   const t = translations[currentLanguage];
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('gameScreen').style.display = 'block';
-  setTimeout(() => document.getElementById('gameScreen').classList.add('visible'), 10);
+  setTimeout(() => {
+    document.getElementById('gameScreen').classList.add('visible');
+  }, 10);
 
   const user = auth.currentUser;
   if (!user) {
-    alert("Пользователь не найден — попробуй войти заново.");
+    alert(t.userNotFoundAlert);
     showLogin();
     return;
   }
 
   try {
-    const dbRef = ref(db, "users/" + user.uid);
-    const snapshot = await get(dbRef);
+    const snapshot = await get(ref(db, "users/" + user.uid));
     if (snapshot.exists()) {
       const data = snapshot.val();
-
-      // Загружаем реальные данные
       currentUsername = data.username || "Без имени";
       count = data.count || 0;
       money = data.money || 0;
       internal_level = data.level || 0;
 
-      // Обновляем интерфейс
+      // обновляем все данные интерфейса
       updateCounter?.();
       updateMoney?.();
       updateLevel?.();
@@ -1600,29 +1599,33 @@ async function showGame() {
       updateInventory?.();
       updateQuests?.();
 
-      // --- всё, что раньше было снаружи функции showGame() ---
+      console.log("✅ Прогресс загружен:", data);
+    } else {
+      alert(t.userNotFoundAlert);
+    }
+  } catch (err) {
+    console.error("Ошибка при загрузке данных:", err);
+  }
 
-      // Сносим старую админ-кнопку, если была
-      const existingAdminButton = document.getElementById('adminButton');
-      if (existingAdminButton && existingAdminButton.parentNode) {
-        existingAdminButton.parentNode.removeChild(existingAdminButton);
-      }
+  // Добавляем кнопку админки
+  const existingAdminButton = document.getElementById('adminButton');
+  if (existingAdminButton) existingAdminButton.remove();
 
-      // Добавляем админ-кнопку только для Admin
-      if (currentUsername === 'Admin') {
-        const adminButton = document.createElement('button');
-        adminButton.id = 'adminButton';
-        adminButton.innerText = t.adminPanelTitle;
-        adminButton.onclick = showAdminPanel;
-        adminButton.style.position = 'absolute';
-        adminButton.style.top = '0px';
-        adminButton.style.right = '10px';
-        adminButton.style.fontSize = '16px';
-        adminButton.style.padding = '8px 16px';
-        adminButton.style.backgroundColor = '#FF00FF';
-        const gs = document.getElementById('gameScreen');
-        if (gs) gs.appendChild(adminButton);
-      }
+  if (currentUsername === 'Admin') {
+    const adminButton = document.createElement('button');
+    adminButton.id = 'adminButton';
+    adminButton.innerText = t.adminPanelTitle;
+    adminButton.onclick = showAdminPanel;
+    adminButton.style.position = 'absolute';
+    adminButton.style.top = '0px';
+    adminButton.style.right = '10px';
+    adminButton.style.fontSize = '16px';
+    adminButton.style.padding = '8px 16px';
+    adminButton.style.backgroundColor = '#FF00FF';
+    document.getElementById('gameScreen').appendChild(adminButton);
+  }
+}
+
 
       // Удаляем демо-лейблы/таймер, если вдруг остались
       const existingDemoLabel = document.getElementById('demoLabel');
