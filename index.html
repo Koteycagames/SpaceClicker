@@ -99,23 +99,24 @@
   }
 
   // === Сохранение прогресса ===
-  async function increment() {
-    count++;
-    updateCounter();
+async function increment() {
+  count++;
+  updateCounter();
 
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await update(ref(db, "users/" + user.uid), {
-          count,
-          money,
-          level: internal_level
-        });
-      } catch (error) {
-        console.error("Ошибка сохранения:", error);
-      }
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      await update(ref(db, "users/" + user.uid), {
+        count,
+        money,
+        level: internal_level
+      });
+    } catch (error) {
+      console.error("Ошибка сохранения данных:", error);
     }
   }
+}
+
 
   // === Делаем функции доступными ===
   window.doRegister = doRegister;
@@ -1567,27 +1568,47 @@ function checkKey() {
     document.getElementById('blockedMenu').innerHTML = content;
   }
 
-  function showGame() {
-    var t = translations[currentLanguage];
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('gameScreen').style.display = 'block';
-    setTimeout(() => { document.getElementById('gameScreen').classList.add('visible'); }, 10);
-    var user = getCurrentUser();
-    if (user) {
-      count = parseFloat(user.count) || 0;
-      money = parseFloat(user.money) || 0;
-      internal_level = user.internal_level || 0;
-      updateCounter();
-      updateMoney();
-      updateLevel();
-      updateCurrentQuest();
-      if (user.active_quest !== null) {
-        startQuestTimer();
-        startQuestUpdateInterval();
-      }
+async function showGame() {
+  const t = translations[currentLanguage];
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'block';
+  setTimeout(() => document.getElementById('gameScreen').classList.add('visible'), 10);
+
+  const user = auth.currentUser;
+  if (!user) {
+    alert("Пользователь не найден — попробуй войти заново.");
+    showLogin();
+    return;
+  }
+
+  try {
+    const dbRef = ref(db, "users/" + user.uid);
+    const snapshot = await get(dbRef);
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+
+      // Загружаем реальные данные
+      currentUsername = data.username || "Без имени";
+      count = data.count || 0;
+      money = data.money || 0;
+      internal_level = data.level || 0;
+
+      // Обновляем интерфейс
+      updateCounter?.();
+      updateMoney?.();
+      updateLevel?.();
+      updateShop?.();
+      updateInventory?.();
+      updateQuests?.();
+
+      console.log("✅ Данные игрока загружены:", data);
     } else {
-      alert(t.userNotFoundAlert);
+      console.warn("⚠️ Нет данных в базе для этого пользователя.");
     }
+  } catch (error) {
+    console.error("Ошибка загрузки данных:", error);
+  }
+}
 
     // Remove admin button if exists
     var existingAdminButton = document.getElementById('adminButton');
