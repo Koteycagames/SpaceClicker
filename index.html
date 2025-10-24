@@ -14,22 +14,20 @@
     ref,
     set,
     get,
-    child,
-    update
+    update,
+    child
   } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
 
-  // === Конфигурация Firebase ===
   const firebaseConfig = {
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
     authDomain: "spaceclicker-78ef5.firebaseapp.com",
+    databaseURL: "https://spaceclicker-78ef5-default-rtdb.firebaseio.com",
     projectId: "spaceclicker-78ef5",
     storageBucket: "spaceclicker-78ef5.appspot.com",
     messagingSenderId: "1007817982727",
-    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2",
-    databaseURL: "https://spaceclicker-78ef5-default-rtdb.firebaseio.com"
+    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
-  // === Инициализация Firebase ===
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getDatabase(app);
@@ -38,6 +36,7 @@
   async function doRegister() {
     const username = document.getElementById("regUsername").value.trim();
     const password = document.getElementById("regPassword").value.trim();
+    const email = `${username}@clicker.com`;
     const t = translations[currentLanguage];
 
     if (!username || !password) {
@@ -45,22 +44,23 @@
       return;
     }
 
-    const email = `${username}@clicker.com`;
     try {
-      const userCred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
       await set(ref(db, "users/" + uid), {
         username,
         count: 0,
         money: 0,
-        level: 0,
-        createdAt: new Date().toISOString()
+        level: 0
       });
       showMsg("registerMsg", t.registrationSuccess, true);
       showLogin();
-    } catch (error) {
-      showMsg("registerMsg", error.message, false);
-      console.error(error);
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        showMsg("registerMsg", t.userExists, false);
+      } else {
+        showMsg("registerMsg", err.message, false);
+      }
     }
   }
 
@@ -68,6 +68,7 @@
   async function doLogin() {
     const username = document.getElementById("loginUsername").value.trim();
     const password = document.getElementById("loginPassword").value.trim();
+    const email = `${username}@clicker.com`;
     const t = translations[currentLanguage];
 
     if (!username || !password) {
@@ -75,54 +76,51 @@
       return;
     }
 
-    const email = `${username}@clicker.com`;
     try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
-
-      const snapshot = await get(child(ref(db), "users/" + uid));
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        currentUsername = data.username;
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
+      const snap = await get(child(ref(db), "users/" + uid));
+      if (snap.exists()) {
+        const data = snap.val();
+        currentUsername = username;
         count = data.count || 0;
         money = data.money || 0;
         internal_level = data.level || 0;
         showMsg("loginMsg", t.loginSuccess, true);
-        setTimeout(showLoading, 800);
+        setTimeout(showLoading, 500);
       } else {
         showMsg("loginMsg", t.userNotFound, false);
       }
-    } catch (error) {
-      showMsg("loginMsg", error.message, false);
-      console.error(error);
+    } catch (err) {
+      console.error(err);
+      showMsg("loginMsg", err.message, false);
     }
   }
 
-  // === Сохранение прогресса ===
-async function increment() {
-  count++;
-  updateCounter();
+  // === Сохранение кликов ===
+  async function increment() {
+    count++;
+    updateCounter();
 
-  const user = auth.currentUser;
-  if (user) {
-    try {
-      await update(ref(db, "users/" + user.uid), {
-        count,
-        money,
-        level: internal_level
-      });
-    } catch (error) {
-      console.error("Ошибка сохранения данных:", error);
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await update(ref(db, "users/" + user.uid), {
+          count,
+          money,
+          level: internal_level
+        });
+      } catch (err) {
+        console.error("Ошибка сохранения:", err);
+      }
     }
   }
-}
 
-
-  // === Делаем функции доступными ===
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
 </script>
+
 
 
 
