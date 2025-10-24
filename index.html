@@ -1,10 +1,125 @@
-<!DOCTYPE html>
 <html>
 <head>
-  <title>Clicker (Firebase sync)</title>
+  <title>Clicker</title>
   <meta charset="utf-8">
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
+    authDomain: "spaceclicker-78ef5.firebaseapp.com",
+    projectId: "spaceclicker-78ef5",
+    storageBucket: "spaceclicker-78ef5.firebasestorage.app",
+    messagingSenderId: "1007817982727",
+    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
+  };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+window.firebaseAuth = auth;
+window.firebaseDB = db;
+// === Регистрация пользователя ===
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value.trim();
+  const t = translations[currentLanguage];
+
+  if (!username || !password) {
+    showMsg('registerMsg', t.enterUsernamePassword, false);
+    return;
+  }
+
+  const email = `${username}@clicker.com`; // создаём "почту" из ника
+  try {
+    const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+    const user = userCredential.user;
+
+    // создаём документ в Firestore
+    await setDoc(doc(firebaseDB, "users", user.uid), {
+      username: username,
+      count: 0,
+      money: 0,
+      level: 0,
+      achievements: [],
+      createdAt: new Date().toISOString()
+    });
+
+    showMsg('registerMsg', t.registrationSuccess, true);
+    showLogin(); // переключаем обратно на вход
+  } catch (error) {
+    if (error.code === 'auth/email-already-in-use') {
+      showMsg('registerMsg', t.userExists, false);
+    } else {
+      showMsg('registerMsg', error.message, false);
+    }
+  }
+}
+
+
+// === Вход пользователя ===
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  const t = translations[currentLanguage];
+
+  if (!username || !password) {
+    showMsg('loginMsg', t.enterUsernamePassword, false);
+    return;
+  }
+
+  const email = `${username}@clicker.com`;
+  try {
+    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const user = userCredential.user;
+
+    // Загружаем прогресс из Firestore
+    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      currentUsername = username;
+      count = data.count || 0;
+      money = data.money || 0;
+      internal_level = data.level || 0;
+
+      showMsg('loginMsg', t.loginSuccess, true);
+      showLoading(); // запускаем игру
+    } else {
+      showMsg('loginMsg', t.userNotFound, false);
+    }
+  } catch (error) {
+    showMsg('loginMsg', t.invalidUsernamePassword, false);
+    console.error(error);
+  }
+}
+
+
+// === Обновление прогресса (при каждом клике) ===
+async function increment() {
+  count++;
+  updateCounter();
+
+  const user = firebaseAuth.currentUser;
+  if (user) {
+    try {
+      await setDoc(doc(firebaseDB, "users", user.uid), {
+        username: currentUsername,
+        count: count,
+        money: money,
+        level: internal_level
+      }, { merge: true });
+    } catch (error) {
+      console.error("Ошибка сохранения данных:", error);
+    }
+  }
+}
+
+</script>
+
   <style>
-    /* === (Твой оригинальный CSS без изменений) === */
     html, body {
       overflow: hidden;  /* Скрывает все полосы прокрутки */
       margin: 0;         /* Убирает лишние отступы */
@@ -12,26 +127,305 @@
       height: 100%;      /* Заставляет body занимать весь экран */
       width: 100%;       /* Заставляет body занимать весь экран */
       font-family: Arial; 
-      background: #000 url('https://www.transparenttextures.com/patterns/stardust.png');
-      color: #fff;
+      background: #000 url('https://www.transparenttextures.com/patterns/stardust.png'); /* Space background */
+      color: #fff; /* White text for space theme */
     }
     .container {
       width: 320px;
       margin: 50px auto 0 auto;
-      background: rgba(0, 0, 50, 0.8);
+      background: rgba(0, 0, 50, 0.8); /* Dark blue semi-transparent for space feel */
       padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5); /* Neon glow */
       position: relative;
       left: 50px;
       transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out, box-shadow 0.5s ease;
     }
-    /* ... (весь остальной CSS — скопирован без изменений) ... */
-    /* Для краткости здесь пропускаю оставшуюся часть стилей — в файле они сохранены полностью как у тебя */
+    .container:hover {
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.8); /* Enhanced glow on hover */
+    }
+    .container.fade-in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    input { 
+      width: 100%; 
+      padding: 8px; 
+      margin: 8px 0; 
+      box-sizing: border-box; 
+      transition: border-color 0.3s, box-shadow 0.3s; 
+      border: 1px solid #00ffff; /* Cyan border */
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+    }
+    input:focus { 
+      border-color: #ff00ff; /* Magenta on focus */
+      box-shadow: 0 0 10px #ff00ff;
+    }
+    button { 
+      padding: 8px 16px; 
+      margin-right: 10px; 
+      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, color 0.3s ease; 
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #4CAF50; /* Default green, but will override for theme */
+      color: white;
+    }
+    button:hover { 
+      transform: scale(1.1) rotate(2deg); /* More animation: scale and rotate */
+      box-shadow: 0 4px 8px rgba(255, 0, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.7); /* Glowing shadow */
+      background-color: #45a049;
+    }
+    button:active {
+      transform: scale(0.95) rotate(-2deg); /* Click animation */
+      box-shadow: 0 0 10px rgba(255, 255, 0, 0.8); /* Yellow flash on click */
+    }
+    #msg { margin-top: 10px; height: 18px; color: red; }
+    .link-button {
+      background: none;
+      border: none;
+      color: #00ffff; /* Cyan for links */
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+      font-size: 14px;
+      transition: color 0.3s ease, transform 0.3s ease, text-shadow 0.3s ease;
+    }
+    .link-button:hover {
+      color: #ff00ff; /* Magenta on hover */
+      transform: scale(1.1);
+      text-shadow: 0 0 5px #ff00ff;
+    }
+    #loadingScreen {
+      text-align: center;
+      margin-top: 50px;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+      color: #00ffff; /* Cyan text */
+    }
+    #loadingScreen.visible {
+      opacity: 1;
+    }
+    #gameScreen {
+      text-align: center;
+      margin-top: 100px;
+      position: relative;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+    }
+    #gameScreen.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #gameScreen button {
+      font-size: 20px;
+      padding: 10px 20px;
+      background-color: #2196F3; /* Blue for space */
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    #gameScreen button:hover {
+      background-color: #0b7dda;
+      transform: scale(1.2) rotate(5deg); /* More dynamic animation */
+      box-shadow: 0 0 15px #00ffff;
+    }
+    #gameScreen button:active {
+      transform: scale(1.0) rotate(-5deg);
+      box-shadow: 0 0 20px #ff00ff;
+    }
+    #shopButton, #inventoryButton, #questsButton {
+      position: absolute;
+      left: 10px;
+      font-size: 16px;
+      padding: 8px 16px;
+      background-color: #FF9800; /* Orange override */
+    }
+    #shopButton {
+      top: 0px;
+    }
+    #inventoryButton {
+      top: 40px;
+    }
+    #questsButton {
+      top: 80px;
+    }
+    #achievementsButton, #promoButton {
+      position: absolute;
+      right: 10px;
+      font-size: 16px;
+      padding: 8px 16px;
+    }
+    #achievementsButton {
+      top: 40px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #achievementsButton:hover {
+      background-color: #0b7dda;
+    }
+    #promoButton {
+      top: 80px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #promoButton:hover {
+      background-color: #0b7dda;
+    }
+    #exitButton {
+      position: absolute;
+      top: 120px;
+      right: 10px;
+      background-color: red;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #exitButton:hover {
+      background-color: darkred;
+    }
+    #shopMenu, #inventoryMenu, #adminMenu, #issueClicksMenu, #issueCookieMenu, #issueAchievementMenu, #blockedMenu, #achievementsMenu, #promoMenu, #demoExpiredMenu, #consoleMenu, #questsMenu, #settingsMenu {
+      display: none;
+      position: absolute;
+      background: rgba(0, 0, 50, 0.9); /* Space dark blue */
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      width: 300px;
+      z-index: 3000;
+      cursor: move;
+      opacity: 0;
+      transform: scale(0.95) translateY(-20px);
+      transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.5s ease;
+      color: #fff;
+    }
+    #shopMenu.open, #inventoryMenu.open, #adminMenu.open, #issueClicksMenu.open, #issueCookieMenu.open, #issueAchievementMenu.open, #blockedMenu.open, #achievementsMenu.open, #promoMenu.open, #demoExpiredMenu.open, #consoleMenu.open, #questsMenu.open, #settingsMenu.open {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
+    }
+    #shopMenu {
+      top: 20%;
+      left: 30%;
+    }
+    #inventoryMenu {
+      top: 20%;
+      left: 50%;
+    }
+    #adminMenu {
+      top: 20%;
+      left: 40%;
+    }
+    #issueClicksMenu, #issueCookieMenu, #issueAchievementMenu, #blockedMenu, #promoMenu, #demoExpiredMenu, #consoleMenu {
+      top: 30%;
+      left: 40%;
+    }
+    #achievementsMenu, #questsMenu, #settingsMenu {
+      top: 20%;
+      left: 40%;
+    }
+    #questsMenu {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #shopMenu h3, #inventoryMenu h3, #adminMenu h3, #issueClicksMenu h3, #issueCookieMenu h3, #issueAchievementMenu h3, #blockedMenu h3, #achievementsMenu h3, #promoMenu h3, #demoExpiredMenu h3, #consoleMenu h3, #questsMenu h3, #settingsMenu h3 {
+      margin-top: 0;
+      color: #00ffff; /* Cyan headers */
+      cursor: grab;
+      text-shadow: 0 0 5px #00ffff;
+    }
+    #shopMenu button, #inventoryMenu button, #adminMenu button, #issueClicksMenu button, #issueCookieMenu button, #issueAchievementMenu button, #blockedMenu button, #achievementsMenu button, #promoMenu button, #demoExpiredMenu button, #consoleMenu button, #questsMenu button, #settingsMenu button {
+      font-size: 16px;
+      padding: 8px 16px;
+      margin-top: 10px;
+      background-color: #2196F3;
+      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    #shopMenu button:hover, #inventoryMenu button:hover, #adminMenu button:hover, #issueClicksMenu button:hover, #issueCookieMenu button:hover, #issueAchievementMenu button:hover, #blockedMenu button:hover, #achievementsMenu button:hover, #promoMenu button:hover, #demoExpiredMenu button:hover, #consoleMenu button:hover, #questsMenu button:hover, #settingsMenu button:hover {
+      transform: scale(1.1) rotate(3deg);
+      box-shadow: 0 0 15px #ff00ff;
+    }
+    #shopMenu button:active, #inventoryMenu button:active, #adminMenu button:active, #issueClicksMenu button:active, #issueCookieMenu button:active, #issueAchievementMenu button:active, #blockedMenu button:active, #achievementsMenu button:active, #promoMenu button:active, #demoExpiredMenu button:active, #consoleMenu button:active, #questsMenu button:active, #settingsMenu button:active {
+      transform: scale(0.9) rotate(-3deg);
+      box-shadow: 0 0 20px #ffff00;
+    }
+    h2 {
+      color: #00ffff;
+      font-size: 24px;
+      transition: color 0.3s ease, text-shadow 0.3s ease;
+      text-shadow: 0 0 5px #00ffff;
+    }
+    h2:hover {
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+    }
+    #keyContainer {
+      text-align: center;
+      margin-top: 50px;
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+    }
+    #keyContainer.fade-out {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    #authContainer {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+    }
+    #authContainer.fade-in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #currentQuest {
+      color: #ffff00;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    #pauseOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(5px);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    #pauseMenu {
+      background: rgba(0, 0, 50, 0.9);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      text-align: center;
+      color: #fff;
+    }
+    #pauseMenu button {
+      display: block;
+      margin: 10px auto;
+      width: 200px;
+    }
   </style>
 </head>
 <body onload="init();">
-  <!-- === (весь твой HTML-интерфейс — НЕ ТРОГАЛ) === -->
   <div id="keyContainer" class="container">
     <h2 id="enterKeyTitle"></h2>
     <input type="text" id="inputText" placeholder=""><br><br>
@@ -88,20 +482,58 @@
     <p id="currentQuest"></p>
   </div>
 
-  <!-- остальные меню (shopMenu, inventoryMenu, и т.д.) — как в оригинале -->
-  <div id="shopMenu"></div>
-  <div id="inventoryMenu"></div>
-  <div id="adminMenu"></div>
-  <div id="issueClicksMenu"></div>
-  <div id="issueCookieMenu"></div>
-  <div id="issueAchievementMenu"></div>
-  <div id="blockedMenu"></div>
-  <div id="achievementsMenu"></div>
-  <div id="promoMenu"></div>
-  <div id="demoExpiredMenu"></div>
-  <div id="consoleMenu"></div>
-  <div id="questsMenu"></div>
-  <div id="settingsMenu"></div>
+  <div id="shopMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="inventoryMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="adminMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueClicksMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueCookieMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueAchievementMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="blockedMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="achievementsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="promoMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="demoExpiredMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="consoleMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="questsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="settingsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
   <div id="pauseOverlay">
     <div id="pauseMenu">
       <h3 id="pauseTitle"></h3>
@@ -111,107 +543,962 @@
     </div>
   </div>
 
-<script type="module">
-/* =========================
-   FIREBASE SETUP (module)
-   ========================= */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  onSnapshot,
-  updateDoc,
-  increment as fbIncrement,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+<script>
+  var isDemo = false;
+  var demoUser = null;
+  var demoTimerInterval = null;
+  var demoTimeLeft = 180; // 3 minutes in seconds
+  var isInfiniteDemo = false;
+  var demoJustExpired = false;
+  var questUpdateInterval = null;
+  var isPaused = false;
+  var pauseStartTime = null;
+  var wasQuestActive = false;
+  var wasDemoTimerActive = false;
+  var keys = {};
+  var currentLanguage = localStorage.getItem('language') || 'ru';
 
-/* ======= твой firebaseConfig (тот что ты прислал) ======= */
-const firebaseConfig = {
-  apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
-  authDomain: "spaceclicker-78ef5.firebaseapp.com",
-  projectId: "spaceclicker-78ef5",
-  storageBucket: "spaceclicker-78ef5.firebasestorage.app",
-  messagingSenderId: "1007817982727",
-  appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
+  var translations = {
+    ru: {
+      title: 'Clicker',
+      enterKeyTitle: 'Введите ключ для продолжения',
+      enterKeyPlaceholder: 'Введите ключ',
+      submitKeyButton: 'Ввести',
+      exitKeyButton: 'Выйти',
+      demoModeButton: 'Demo Mode',
+      loginTitle: 'Вход',
+      usernamePlaceholder: 'Имя пользователя',
+      passwordPlaceholder: 'Пароль',
+      loginButton: 'Войти',
+      noAccountText: 'Нет аккаунта?',
+      registerLink: 'Зарегистрироваться',
+      registerTitle: 'Регистрация',
+      registerButton: 'Зарегистрироваться',
+      backButton: 'Назад',
+      loadingText: 'Загрузка кликера',
+      shopButton: 'Магазин',
+      inventoryButton: 'Инвентарь',
+      questsButton: 'Задания',
+      level: 'Уровень: ',
+      counter: 'Накликано: ',
+      money: 'Деньги: ',
+      clickButton: 'Клик',
+      achievementsButton: 'Достижения',
+      promoButton: 'Промокоды',
+      exitButton: 'Выйти',
+      currentQuestNone: 'Текущее задание: нет',
+      pauseTitle: 'Пауза',
+      resumeButton: 'Продолжить',
+      settingsButton: 'Настройки',
+      logoutButton: 'Выйти',
+      keyNoDate: 'Ключ для сегодняшнего дня не задан.',
+      keyIncorrect: 'Неверный ключ.',
+      keyCorrect: 'Ключ верный — доступ разрешён.',
+      enterUsernamePassword: 'Введите имя и пароль',
+      invalidUsernamePassword: 'Неверное имя или пароль',
+      userExists: 'Пользователь уже существует',
+      registrationSuccess: 'Регистрация успешна!',
+      loginSuccess: 'Успешный вход!',
+      shopTitle: 'Магазин',
+      smallCookie: 'маленькая печенька',
+      mediumCookie: 'Средняя Печенька',
+      largeCookie: 'Большая Печенька',
+      buy: 'Купить',
+      bought: '(Куплено)',
+      close: 'Закрыть',
+      notEnoughClicks: 'Недостаточно кликов!',
+      boughtSuccess: 'Куплено!',
+      inventoryTitle: 'Инвентарь',
+      equipped: ' - Экипировано',
+      unequip: 'Снять',
+      equip: 'Экипировать',
+      inventoryEmpty: 'Ваш инвентарь пуст!',
+      adminPanelTitle: 'Админ Панель',
+      targetUsernamePlaceholder: 'Имя аккаунта',
+      issueClicks: 'Выдать клики',
+      issueCookie: 'Выдать печеньку',
+      issueAchievement: 'Выдать достижение',
+      block: 'Заблокировать',
+      unblock: 'Разблокировать',
+      resetClicks: 'Сбросить клики',
+      issueClicksTitle: 'Выдать клики',
+      clickAmountPlaceholder: 'Количество кликов',
+      issue: 'Выдать',
+      invalidAmount: 'Неверное количество!',
+      issuedClicks: 'Выдано {amount} кликов для {target}',
+      issueCookieTitle: 'Выдать печеньку',
+      small: 'Маленькую',
+      medium: 'Среднюю',
+      large: 'Большую',
+      issuedCookieSmall: 'Дана маленькая печенька для {target}',
+      issuedCookieMedium: 'Дана средняя печенька для {target}',
+      issuedCookieLarge: 'Дана большая печенька для {target}',
+      issueAchievementTitle: 'Выдать достижение',
+      achievement100: '100',
+      achievement500: 'Пятихатка',
+      achievement1000: 'Косарь',
+      achievement3000: '3 конуса',
+      achievement5000: 'Пятёрик',
+      achievement10000: 'У тебя нервы железные?',
+      issuedAchievement: 'Дано достижение {name} для {target}',
+      blocked: 'Аккаунт {target} заблокирован',
+      unblocked: 'Аккаунт {target} разблокирован',
+      clicksReset: 'Клики сброшены для {target}',
+      enterUsername: 'Введите имя аккаунта!',
+      userNotFound: 'Пользователь не найден!',
+      blockedTitle: 'Блокировка аккаунта',
+      blockedText: 'Ваш аккаунт был заблокирован Администратором',
+      userNotFoundAlert: 'Пользователь не найден!',
+      demoLabel: 'Demo Mode',
+      demoTimer: 'Оставшееся время: ',
+      demoExpiredTitle: 'Время истекло',
+      demoExpiredText: 'Время пробного тестирования окончено',
+      ok: 'Ок',
+      achievementsTitle: 'Достижения',
+      achieved: 'Получено',
+      notAchieved: 'Не получено',
+      achievement100Desc: '100 (достигнуть 100 кликов): ',
+      achievement500Desc: 'Пятихатка (достигнуть 500 кликов): ',
+      achievement1000Desc: 'Косарь (достигнуть 1000 кликов): ',
+      achievement3000Desc: '3 конуса (достигнуть 3000 кликов): ',
+      achievement5000Desc: 'Пятёрик (достигнуть 5000 кликов): ',
+      achievement10000Desc: 'У тебя нервы железные? (достигнуть 10000 кликов): ',
+      promoTitle: 'Промокоды',
+      promoPlaceholder: 'Введите промокод',
+      redeem: 'Ввести',
+      invalidPromo: 'Неверный промокод!',
+      promoSmallCookie: 'Получена маленькая печенька!',
+      promo100Clicks: 'Получено 100 кликов!',
+      promoLargeCookie: 'Получена большая печенька!',
+      consoleTitle: 'Консоль',
+      consolePlaceholder: 'Введите команду',
+      execute: 'Ввести',
+      enterCommand: 'Введите команду!',
+      invalidCommand: 'Неизвестная команда: {command}',
+      setClicksSuccess: 'Клики установлены на {amount}',
+      invalidNumber: 'Неверное число в команде!',
+      invalidFormat: 'Неверный формат команды! Используйте {format}',
+      gaveSmallCookie: 'Получена маленькая печенька!',
+      gaveMediumCookie: 'Получена средняя печенька!',
+      gaveLargeCookie: 'Получена большая печенька!',
+      notInDemo: 'Вы не в Demo Mode!',
+      exitDemo: 'Выход из Demo Mode',
+      notInKeyMenu: 'Не в меню с ключами!',
+      autoPassKey: 'Auto passing key to registration',
+      invalidTimeFormat: 'Неверный формат времени!',
+      demoTimeSet: 'Demo time set to {time}',
+      demoTimeInfinity: 'Demo time set to infinity',
+      questsTitle: 'Задания',
+      questCompleted: '✅',
+      questNotCompleted: '❌',
+      takeQuest: 'Взять',
+      cancelQuest: 'Снять',
+      activeQuest: 'У вас уже есть активное задание!',
+      questCancelled: 'Задание отменено!',
+      questTimeExpired: 'Время на задание истекло! Задание провалено.',
+      questCompletedSuccess: 'Задание выполнено! Награда: {reward} денег.',
+      currentQuest: 'Текущее задание: накликать {clicks}/{required} кликов за {remaining} секунд',
+      settingsTitle: 'Настройки',
+      uiScaleLabel: 'Размер интерфейса:',
+      smallScale: 'Маленький',
+      mediumScale: 'Средний',
+      largeScale: 'Большой',
+      languageLabel: 'Язык:',
+      russian: 'Русский',
+      english: 'English',
+      ukrainian: 'Українська',
+      apply: 'Применить',
+      achievementUnlocked: 'Достижение разблокировано: {name}\nПоздравляем! Вы достигли {amount} кликов.',
+      promoDisabledInDemo: 'Промокоды недоступны в Demo Mode',
+      demoTimerInfinity: 'Оставшееся время: Infinity',
+      questDescTemplate: 'накликать {required} кликов за {time} секунд'
+    },
+    en: {
+      title: 'Clicker',
+      enterKeyTitle: 'Enter key to continue',
+      enterKeyPlaceholder: 'Enter key',
+      submitKeyButton: 'Submit',
+      exitKeyButton: 'Exit',
+      demoModeButton: 'Demo Mode',
+      loginTitle: 'Login',
+      usernamePlaceholder: 'Username',
+      passwordPlaceholder: 'Password',
+      loginButton: 'Login',
+      noAccountText: 'No account?',
+      registerLink: 'Register',
+      registerTitle: 'Registration',
+      registerButton: 'Register',
+      backButton: 'Back',
+      loadingText: 'Loading clicker',
+      shopButton: 'Shop',
+      inventoryButton: 'Inventory',
+      questsButton: 'Quests',
+      level: 'Level: ',
+      counter: 'Clicks: ',
+      money: 'Money: ',
+      clickButton: 'Click',
+      achievementsButton: 'Achievements',
+      promoButton: 'Promo codes',
+      exitButton: 'Logout',
+      currentQuestNone: 'Current quest: none',
+      pauseTitle: 'Pause',
+      resumeButton: 'Resume',
+      settingsButton: 'Settings',
+      logoutButton: 'Logout',
+      keyNoDate: 'Key for today is not set.',
+      keyIncorrect: 'Invalid key.',
+      keyCorrect: 'Key is correct — access granted.',
+      enterUsernamePassword: 'Enter username and password',
+      invalidUsernamePassword: 'Invalid username or password',
+      userExists: 'User already exists',
+      registrationSuccess: 'Registration successful!',
+      loginSuccess: 'Successful login!',
+      shopTitle: 'Shop',
+      smallCookie: 'small cookie',
+      mediumCookie: 'Medium Cookie',
+      largeCookie: 'Large Cookie',
+      buy: 'Buy',
+      bought: '(Bought)',
+      close: 'Close',
+      notEnoughClicks: 'Not enough clicks!',
+      boughtSuccess: 'Bought!',
+      inventoryTitle: 'Inventory',
+      equipped: ' - Equipped',
+      unequip: 'Unequip',
+      equip: 'Equip',
+      inventoryEmpty: 'Your inventory is empty!',
+      adminPanelTitle: 'Admin Panel',
+      targetUsernamePlaceholder: 'Account name',
+      issueClicks: 'Issue clicks',
+      issueCookie: 'Issue cookie',
+      issueAchievement: 'Issue achievement',
+      block: 'Block',
+      unblock: 'Unblock',
+      resetClicks: 'Reset clicks',
+      issueClicksTitle: 'Issue clicks',
+      clickAmountPlaceholder: 'Number of clicks',
+      issue: 'Issue',
+      invalidAmount: 'Invalid amount!',
+      issuedClicks: 'Issued {amount} clicks to {target}',
+      issueCookieTitle: 'Issue cookie',
+      small: 'Small',
+      medium: 'Medium',
+      large: 'Large',
+      issuedCookieSmall: 'Issued small cookie to {target}',
+      issuedCookieMedium: 'Issued medium cookie to {target}',
+      issuedCookieLarge: 'Issued large cookie to {target}',
+      issueAchievementTitle: 'Issue achievement',
+      achievement100: '100',
+      achievement500: 'Five hundred',
+      achievement1000: 'Thousand',
+      achievement3000: '3 cones',
+      achievement5000: 'Five grand',
+      achievement10000: 'Do you have iron nerves?',
+      issuedAchievement: 'Issued achievement {name} to {target}',
+      blocked: 'Account {target} blocked',
+      unblocked: 'Account {target} unblocked',
+      clicksReset: 'Clicks reset for {target}',
+      enterUsername: 'Enter account name!',
+      userNotFound: 'User not found!',
+      blockedTitle: 'Account Blocked',
+      blockedText: 'Your account has been blocked by the Administrator',
+      userNotFoundAlert: 'User not found!',
+      demoLabel: 'Demo Mode',
+      demoTimer: 'Time left: ',
+      demoExpiredTitle: 'Time Expired',
+      demoExpiredText: 'Trial testing time is over',
+      ok: 'Ok',
+      achievementsTitle: 'Achievements',
+      achieved: 'Achieved',
+      notAchieved: 'Not achieved',
+      achievement100Desc: '100 (reach 100 clicks): ',
+      achievement500Desc: 'Five hundred (reach 500 clicks): ',
+      achievement1000Desc: 'Thousand (reach 1000 clicks): ',
+      achievement3000Desc: '3 cones (reach 3000 clicks): ',
+      achievement5000Desc: 'Five grand (reach 5000 clicks): ',
+      achievement10000Desc: 'Do you have iron nerves? (reach 10000 clicks): ',
+      promoTitle: 'Promo codes',
+      promoPlaceholder: 'Enter promo code',
+      redeem: 'Redeem',
+      invalidPromo: 'Invalid promo code!',
+      promoSmallCookie: 'Received small cookie!',
+      promo100Clicks: 'Received 100 clicks!',
+      promoLargeCookie: 'Received large cookie!',
+      consoleTitle: 'Console',
+      consolePlaceholder: 'Enter command',
+      execute: 'Execute',
+      enterCommand: 'Enter command!',
+      invalidCommand: 'Unknown command: {command}',
+      setClicksSuccess: 'Clicks set to {amount}',
+      invalidNumber: 'Invalid number in command!',
+      invalidFormat: 'Invalid command format! Use {format}',
+      gaveSmallCookie: 'Received small cookie!',
+      gaveMediumCookie: 'Received medium cookie!',
+      gaveLargeCookie: 'Received large cookie!',
+      notInDemo: 'You are not in Demo Mode!',
+      exitDemo: 'Exiting Demo Mode',
+      notInKeyMenu: 'Not in key menu!',
+      autoPassKey: 'Auto passing key to registration',
+      invalidTimeFormat: 'Invalid time format!',
+      demoTimeSet: 'Demo time set to {time}',
+      demoTimeInfinity: 'Demo time set to infinity',
+      questsTitle: 'Quests',
+      questCompleted: '✅',
+      questNotCompleted: '❌',
+      takeQuest: 'Take',
+      cancelQuest: 'Cancel',
+      activeQuest: 'You already have an active quest!',
+      questCancelled: 'Quest cancelled!',
+      questTimeExpired: 'Quest time expired! Quest failed.',
+      questCompletedSuccess: 'Quest completed! Reward: {reward} money.',
+      currentQuest: 'Current quest: click {clicks}/{required} clicks in {remaining} seconds',
+      settingsTitle: 'Settings',
+      uiScaleLabel: 'UI Scale:',
+      smallScale: 'Small',
+      mediumScale: 'Medium',
+      largeScale: 'Large',
+      languageLabel: 'Language:',
+      russian: 'Russian',
+      english: 'English',
+      ukrainian: 'Ukrainian',
+      apply: 'Apply',
+      achievementUnlocked: 'Achievement unlocked: {name}\nCongratulations! You reached {amount} clicks.',
+      promoDisabledInDemo: 'Promo codes are unavailable in Demo Mode',
+      demoTimerInfinity: 'Time left: Infinity',
+      questDescTemplate: 'reach {required} clicks in {time} seconds'
+    },
+    uk: {
+      title: 'Клікер',
+      enterKeyTitle: 'Введіть ключ для продовження',
+      enterKeyPlaceholder: 'Введіть ключ',
+      submitKeyButton: 'Ввести',
+      exitKeyButton: 'Вийти',
+      demoModeButton: 'Demo Mode',
+      loginTitle: 'Вхід',
+      usernamePlaceholder: "Ім'я користувача",
+      passwordPlaceholder: 'Пароль',
+      loginButton: 'Увійти',
+      noAccountText: 'Немає облікового запису?',
+      registerLink: 'Зареєструватися',
+      registerTitle: 'Реєстрація',
+      registerButton: 'Зареєструватися',
+      backButton: 'Назад',
+      loadingText: 'Завантаження клікера',
+      shopButton: 'Магазин',
+      inventoryButton: 'Інвентар',
+      questsButton: 'Завдання',
+      level: 'Рівень: ',
+      counter: 'Наклікано: ',
+      money: 'Гроші: ',
+      clickButton: 'Клік',
+      achievementsButton: 'Досягнення',
+      promoButton: 'Промокоди',
+      exitButton: 'Вийти',
+      currentQuestNone: 'Поточне завдання: немає',
+      pauseTitle: 'Пауза',
+      resumeButton: 'Продовжити',
+      settingsButton: 'Налаштування',
+      logoutButton: 'Вийти',
+      keyNoDate: 'Ключ для сьогоднішнього дня не задано.',
+      keyIncorrect: 'Невірний ключ.',
+      keyCorrect: 'Ключ вірний — доступ дозволено.',
+      enterUsernamePassword: "Введіть ім'я та пароль",
+      invalidUsernamePassword: "Невірне ім'я або пароль",
+      userExists: 'Користувач вже існує',
+      registrationSuccess: 'Реєстрація успішна!',
+      loginSuccess: 'Успішний вхід!',
+      shopTitle: 'Магазин',
+      smallCookie: 'маленьке печиво',
+      mediumCookie: 'Середнє Печиво',
+      largeCookie: 'Велике Печиво',
+      buy: 'Купити',
+      bought: '(Куплено)',
+      close: 'Закрити',
+      notEnoughClicks: 'Недостатньо кліків!',
+      boughtSuccess: 'Куплено!',
+      inventoryTitle: 'Інвентар',
+      equipped: ' - Екіпіровано',
+      unequip: 'Зняти',
+      equip: 'Екіпірувати',
+      inventoryEmpty: 'Ваш інвентар порожній!',
+      adminPanelTitle: 'Адмін Панель',
+      targetUsernamePlaceholder: "Ім'я облікового запису",
+      issueClicks: 'Видати кліки',
+      issueCookie: 'Видати печиво',
+      issueAchievement: 'Видати досягнення',
+      block: 'Заблокувати',
+      unblock: 'Розблокувати',
+      resetClicks: 'Скинути кліки',
+      issueClicksTitle: 'Видати кліки',
+      clickAmountPlaceholder: 'Кількість кліків',
+      issue: 'Видати',
+      invalidAmount: 'Невірна кількість!',
+      issuedClicks: 'Видано {amount} кліків для {target}',
+      issueCookieTitle: 'Видати печиво',
+      small: 'Маленьке',
+      medium: 'Середнє',
+      large: 'Велике',
+      issuedCookieSmall: 'Видано маленьке печиво для {target}',
+      issuedCookieMedium: 'Видано середнє печиво для {target}',
+      issuedCookieLarge: 'Видано велике печиво для {target}',
+      issueAchievementTitle: 'Видати досягнення',
+      achievement100: '100',
+      achievement500: 'П\'ятихатка',
+      achievement1000: 'Косар',
+      achievement3000: '3 конуса',
+      achievement5000: 'П\'ятірик',
+      achievement10000: 'У тебе нерви залізні?',
+      issuedAchievement: 'Видано досягнення {name} для {target}',
+      blocked: 'Обліковий запис {target} заблоковано',
+      unblocked: 'Обліковий запис {target} розблоковано',
+      clicksReset: 'Кліки скинуто для {target}',
+      enterUsername: "Введіть ім'я облікового запису!",
+      userNotFound: 'Користувач не знайдений!',
+      blockedTitle: 'Блокування облікового запису',
+      blockedText: 'Ваш обліковий запис було заблоковано Адміністратором',
+      userNotFoundAlert: 'Користувач не знайдений!',
+      demoLabel: 'Demo Mode',
+      demoTimer: 'Залишився час: ',
+      demoExpiredTitle: 'Час минув',
+      demoExpiredText: 'Час пробного тестування закінчено',
+      ok: 'Ок',
+      achievementsTitle: 'Досягнення',
+      achieved: 'Отримано',
+      notAchieved: 'Не отримано',
+      achievement100Desc: '100 (досягти 100 кліків): ',
+      achievement500Desc: 'П\'ятихатка (досягти 500 кліків): ',
+      achievement1000Desc: 'Косар (досягти 1000 кліків): ',
+      achievement3000Desc: '3 конуса (досягти 3000 кліків): ',
+      achievement5000Desc: 'П\'ятірик (досягти 5000 кліків): ',
+      achievement10000Desc: 'У тебе нерви залізні? (досягти 10000 кліків): ',
+      promoTitle: 'Промокоди',
+      promoPlaceholder: 'Введіть промокод',
+      redeem: 'Ввести',
+      invalidPromo: 'Невірний промокод!',
+      promoSmallCookie: 'Отримано маленьке печиво!',
+      promo100Clicks: 'Отримано 100 кліків!',
+      promoLargeCookie: 'Отримано велике печиво!',
+      consoleTitle: 'Консоль',
+      consolePlaceholder: 'Введіть команду',
+      execute: 'Ввести',
+      enterCommand: 'Введіть команду!',
+      invalidCommand: 'Невідома команда: {command}',
+      setClicksSuccess: 'Кліки встановлено на {amount}',
+      invalidNumber: 'Невірне число в команді!',
+      invalidFormat: 'Невірний формат команди! Використовуйте {format}',
+      gaveSmallCookie: 'Отримано маленьке печиво!',
+      gaveMediumCookie: 'Отримано середнє печиво!',
+      gaveLargeCookie: 'Отримано велике печиво!',
+      notInDemo: 'Ви не в Demo Mode!',
+      exitDemo: 'Вихід з Demo Mode',
+      notInKeyMenu: 'Не в меню з ключами!',
+      autoPassKey: 'Auto passing key to registration',
+      invalidTimeFormat: 'Невірний формат часу!',
+      demoTimeSet: 'Demo time set to {time}',
+      demoTimeInfinity: 'Demo time set to infinity',
+      questsTitle: 'Завдання',
+      questCompleted: '✅',
+      questNotCompleted: '❌',
+      takeQuest: 'Взяти',
+      cancelQuest: 'Зняти',
+      activeQuest: 'У вас вже є активне завдання!',
+      questCancelled: 'Завдання скасовано!',
+      questTimeExpired: 'Час на завдання минув! Завдання провалено.',
+      questCompletedSuccess: 'Завдання виконано! Нагорода: {reward} грошей.',
+      currentQuest: 'Поточне завдання: наклікати {clicks}/{required} кліків за {remaining} секунд',
+      settingsTitle: 'Налаштування',
+      uiScaleLabel: 'Розмір інтерфейсу:',
+      smallScale: 'Маленький',
+      mediumScale: 'Середній',
+      largeScale: 'Великий',
+      languageLabel: 'Мова:',
+      russian: 'Російська',
+      english: 'Англійська',
+      ukrainian: 'Українська',
+      apply: 'Застосувати',
+      achievementUnlocked: 'Досягнення розблоковано: {name}\nВітаємо! Ви досягли {amount} кліків.',
+      promoDisabledInDemo: 'Промокоди недоступні в Demo Mode',
+      demoTimerInfinity: 'Залишився час: Infinity',
+      questDescTemplate: 'досягти {required} кліків за {time} секунд'
+    }
+  };
+
+  function init() {
+    var storedKeys = localStorage.getItem('clickerKeys');
+    if (storedKeys) {
+      keys = JSON.parse(storedKeys);
+    } else {
+var encoded_keys = {
+  // 🔹 Старые ключи
+  '2025-10-01': 'TFlTVUtBLUtPVC0x',        // LYSUKA-KOT-1
+  '2025-10-02': 'TFlTVUtBLUtPVC0xMjM=',     // LYSUKA-KOT-123
+  '2025-10-03': 'TFlTVUtBLUtPVC0xMjM0',     // LYSUKA-KOT-1234
+  '2025-10-04': 'TFlTVUtBLUtPVC0xMjM1',     // LYSUKA-KOT-1235
+  '2025-10-05': 'TFlTVUtBLUtPVC0xMjQz',     // LYSUKA-KOT-1243
+  '2025-10-06': 'TFlTVUtBLUtPVC01NDMyMQ==', // LYSUKA-KOT-54321
+  '2025-10-07': 'TFlTVUtBLUtPVC00NTc2',     // LYSUKA-KOT-4576
+  '2025-10-08': 'TFlTVUtBLUtPVC04Mzc0',     // LYSUKA-KOT-8374
+  '2025-10-09': 'TFlTVUtBLUtPVC05MTM1',     // LYSUKA-KOT-9135
+  '2025-10-10': 'TFlTVUtBLUtPVC0xMA==',     // LYSUKA-KOT-10
+
+  // 🔹 Новые ключи (с 24.10.2025 по 23.11.2025)
+  '2025-10-24': 'TFlTVUtBLUtPVC0xNzk=',   // LYSUKA-KOT-179
+  '2025-10-25': 'TFlTVUtBLUtPVC00NzU=',   // LYSUKA-KOT-475
+  '2025-10-26': 'TFlTVUtBLUtPVC01MTk=',   // LYSUKA-KOT-519
+  '2025-10-27': 'TFlTVUtBLUtPVC05Mzg=',   // LYSUKA-KOT-938
+  '2025-10-28': 'TFlTVUtBLUtPVC04NDM=',   // LYSUKA-KOT-843
+  '2025-10-29': 'TFlTVUtBLUtPVC0xMzA5',   // LYSUKA-KOT-1309
+  '2025-10-30': 'TFlTVUtBLUtPVC01Mzc=',   // LYSUKA-KOT-537
+  '2025-10-31': 'TFlTVUtBLUtPVC00ODEw',   // LYSUKA-KOT-4810
+  '2025-11-01': 'TFlTVUtBLUtPVC03MTA=',   // LYSUKA-KOT-710
+  '2025-11-02': 'TFlTVUtBLUtPVC0zOTU=',   // LYSUKA-KOT-395
+  '2025-11-03': 'TFlTVUtBLUtPVC03MDQ4',   // LYSUKA-KOT-7048
+  '2025-11-04': 'TFlTVUtBLUtPVC05ODU=',   // LYSUKA-KOT-985
+  '2025-11-05': 'TFlTVUtBLUtPVC0xODM5',   // LYSUKA-KOT-1839
+  '2025-11-06': 'TFlTVUtBLUtPVC01Mzkx',   // LYSUKA-KOT-5391
+  '2025-11-07': 'TFlTVUtBLUtPVC05MTA3',   // LYSUKA-KOT-9107
+  '2025-11-08': 'TFlTVUtBLUtPVC04NTQ=',   // LYSUKA-KOT-854
+  '2025-11-09': 'TFlTVUtBLUtPVC0zOTEw',   // LYSUKA-KOT-3910
+  '2025-11-10': 'TFlTVUtBLUtPVC01NDA=',   // LYSUKA-KOT-540
+  '2025-11-11': 'TFlTVUtBLUtPVC05ODM=',   // LYSUKA-KOT-983
+  '2025-11-12': 'TFlTVUtBLUtPVC0xODc=',   // LYSUKA-KOT-187
+  '2025-11-13': 'TFlTVUtBLUtPVC0zNTc=',   // LYSUKA-KOT-357
+  '2025-11-14': 'TFlTVUtBLUtPVC03NDE=',   // LYSUKA-KOT-741
+  '2025-11-15': 'TFlTVUtBLUtPVC0xOTM4',   // LYSUKA-KOT-1938
+  '2025-11-16': 'TFlTVUtBLUtPVC01ODA=',   // LYSUKA-KOT-580
+  '2025-11-17': 'TFlTVUtBLUtPVC03MTk=',   // LYSUKA-KOT-719
+  '2025-11-18': 'TFlTVUtBLUtPVC04NDUz',   // LYSUKA-KOT-8453
+  '2025-11-19': 'TFlTVUtBLUtPVC00MDc=',   // LYSUKA-KOT-407
+  '2025-11-20': 'TFlTVUtBLUtPVC05MzE=',   // LYSUKA-KOT-931
+  '2025-11-21': 'TFlTVUtBLUtPVC0xODA=',   // LYSUKA-KOT-180
+  '2025-11-22': 'TFlTVUtBLUtPVC03NTk=',   // LYSUKA-KOT-759
+  '2025-11-23': 'TFlTVUtBLUtPVC04Nzc=',   // LYSUKA-KOT-877
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+      keys = {};
+      for (var date in encoded_keys) {
+        keys[date] = atob(encoded_keys[date]);
+      }
+      localStorage.setItem('clickerKeys', JSON.stringify(keys));
+    }
+    document.getElementById('keyContainer').style.display = 'block';
+    document.getElementById('authContainer').style.display = 'none';
+    document.getElementById('loadingScreen').display = 'none';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'f' || event.key === 'F') {
+        toggleConsole();
+      }
+    });
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape' && document.getElementById('gameScreen').style.display !== 'none' && !isPaused) {
+        pauseGame();
+      } else if (event.key === 'Escape' && isPaused) {
+        resumeGame();
+      }
+    });
+    // Apply saved UI scale
+    var savedScale = localStorage.getItem('uiScale') || '1';
+    document.body.style.transform = `scale(${savedScale})`;
+    document.body.style.transformOrigin = '0 0';
+    document.body.style.width = `${100 / parseFloat(savedScale)}%`;
+    document.body.style.height = `${100 / parseFloat(savedScale)}%`;
 
-/* ============ State for Firebase-backed users ============ */
-let firebaseUser = null;          // firebase auth user object
-let userDocRef = null;            // firestore doc ref for logged user
-let userDocUnsub = null;          // unsubscribe function for onSnapshot
-let migratedFromLocal = false;    // whether we migrated localStorage data
-
-/* ===========================
-   Original variables (untouched)
-   =========================== */
-var isDemo = false;
-var demoUser = null;
-var demoTimerInterval = null;
-var demoTimeLeft = 180;
-var isInfiniteDemo = false;
-var demoJustExpired = false;
-var questUpdateInterval = null;
-var isPaused = false;
-var pauseStartTime = null;
-var wasQuestActive = false;
-var wasDemoTimerActive = false;
-var keys = {};
-var currentLanguage = localStorage.getItem('language') || 'ru';
-
-/* (все остальные переменные и константы из твоего оригинального файла остаются без изменений) */
-var translations = { /* ... полностью копируются 3 языка ... */ };
-
-/* --- Далее вставлены все твои функции из оригинала (init, applyStaticTexts, enterDemoMode и т.д.) 
-       без изменений по логике и UI — я не трогал их. Для экономии места в этом ответе
-       я не копирую весь твой огромный код заново сюда, но в файле, который ты скачиваешь,
-       весь оригинальный JS сохранён. 
-       
-       Что изменено — разделы, связанные с учёткой/сохранением: функции ниже. --- */
-
-/* =========================
-   HELPERS: nick -> email
-   ========================= */
-function nickToEmail(nick){
-  const clean = nick.trim();
-  return `${clean}@clicker.com`;
-}
-
-/* =========================
-   AUTH & FIRESTORE FUNCTIONS
-   ========================= */
-
-/* doRegister: создаёт auth user + doc в Firestore */
-async function doRegister() {
-  var t = translations[currentLanguage];
-  const nick = document.getElementById('regUsername').value.trim();
-  const pass = document.getElementById('regPassword').value;
-  if (!nick || !pass) {
-    showMsg('registerMsg', t.enterUsernamePassword, false);
-    return;
+    // Apply language
+    applyStaticTexts();
+    updateQuestDescriptions();
   }
-  const email = nickToEmail(nick);
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    // создаём документ пользователя
-    const uid = cred.user.uid;
-    const docRef = doc(db, 'users', uid);
-    const initial = {
-      nick: nick,
-      email: email,
-      createdAt: serverTimestamp(),
+
+  function applyStaticTexts() {
+    var t = translations[currentLanguage];
+    document.title = t.title;
+    document.getElementById('enterKeyTitle').innerText = t.enterKeyTitle;
+    document.getElementById('inputText').placeholder = t.enterKeyPlaceholder;
+    document.getElementById('submitKeyButton').innerText = t.submitKeyButton;
+    document.getElementById('exitKeyButton').innerText = t.exitKeyButton;
+    document.getElementById('demoModeButton').innerText = t.demoModeButton;
+    document.getElementById('loginTitle').innerText = t.loginTitle;
+    document.getElementById('loginUsername').placeholder = t.usernamePlaceholder;
+    document.getElementById('loginPassword').placeholder = t.passwordPlaceholder;
+    document.getElementById('loginButton').innerText = t.loginButton;
+    document.getElementById('noAccountText').innerText = t.noAccountText;
+    document.getElementById('registerLink').innerText = t.registerLink;
+    document.getElementById('registerTitle').innerText = t.registerTitle;
+    document.getElementById('regUsername').placeholder = t.usernamePlaceholder;
+    document.getElementById('regPassword').placeholder = t.passwordPlaceholder;
+    document.getElementById('registerButton').innerText = t.registerButton;
+    document.getElementById('backButton').innerText = t.backButton;
+    document.getElementById('shopButton').innerText = t.shopButton;
+    document.getElementById('inventoryButton').innerText = t.inventoryButton;
+    document.getElementById('questsButton').innerText = t.questsButton;
+    document.getElementById('clickButton').innerText = t.clickButton;
+    document.getElementById('achievementsButton').innerText = t.achievementsButton;
+    document.getElementById('promoButton').innerText = t.promoButton;
+    document.getElementById('exitButton').innerText = t.exitButton;
+    document.getElementById('pauseTitle').innerText = t.pauseTitle;
+    document.getElementById('resumeButton').innerText = t.resumeButton;
+    document.getElementById('settingsButton').innerText = t.settingsButton;
+    document.getElementById('logoutButton').innerText = t.logoutButton;
+  }
+
+  function setLanguage(lang) {
+    if (lang !== currentLanguage) {
+      currentLanguage = lang;
+      localStorage.setItem('language', lang);
+      updateAllUI();
+    }
+  }
+
+  function updateAllUI() {
+    var t = translations[currentLanguage];
+    applyStaticTexts();
+    updateQuestDescriptions();
+
+    if (document.getElementById('gameScreen').style.display !== 'none') {
+      updateLevel();
+      updateMoney();
+      updateCounter();
+      updateCurrentQuest();
+    }
+
+    // Update demo elements if in demo
+    var demoLabel = document.getElementById('demoLabel');
+    if (demoLabel) {
+      demoLabel.innerText = t.demoLabel;
+    }
+    var demoTimer = document.getElementById('demoTimer');
+    if (demoTimer) {
+      if (isInfiniteDemo) {
+        demoTimer.innerText = t.demoTimerInfinity;
+      } else {
+        updateDemoTimer();
+      }
+    }
+
+    // Re-render open menus
+    if (document.getElementById('shopMenu').style.display === 'block') {
+      renderShop();
+    }
+    if (document.getElementById('inventoryMenu').style.display === 'block') {
+      renderInventory();
+    }
+    if (document.getElementById('adminMenu').style.display === 'block') {
+      renderAdminPanel();
+    }
+    if (document.getElementById('issueClicksMenu').style.display === 'block') {
+      showIssueClicks();
+    }
+    if (document.getElementById('issueCookieMenu').style.display === 'block') {
+      showIssueCookie();
+    }
+    if (document.getElementById('issueAchievementMenu').style.display === 'block') {
+      showIssueAchievement();
+    }
+    if (document.getElementById('blockedMenu').style.display === 'block') {
+      renderBlocked();
+    }
+    if (document.getElementById('achievementsMenu').style.display === 'block') {
+      renderAchievements();
+    }
+    if (document.getElementById('promoMenu').style.display === 'block') {
+      renderPromo();
+    }
+    if (document.getElementById('demoExpiredMenu').style.display === 'block') {
+      renderDemoExpired();
+    }
+    if (document.getElementById('consoleMenu').style.display === 'block') {
+      renderConsole();
+    }
+    if (document.getElementById('questsMenu').style.display === 'block') {
+      renderQuests();
+    }
+    if (document.getElementById('settingsMenu').style.display === 'block') {
+      renderSettings();
+    }
+
+    // Update loading text if loading screen visible
+    if (document.getElementById('loadingScreen').style.display !== 'none') {
+      document.getElementById('loadingText').innerText = t.loadingText;
+    }
+  }
+
+  function enterDemoMode() {
+    isDemo = true;
+    isInfiniteDemo = false;
+    document.getElementById('keyContainer').classList.add('fade-out');
+    setTimeout(() => {
+      document.getElementById('keyContainer').style.display = 'none';
+      currentUsername = 'Demo';
+      demoUser = {
+        password: 'demo',
+        count: "0",
+        money: "0",
+        has_small_cookie: 0,
+        equipped_small_cookie: 0,
+        has_medium_cookie: 0,
+        equipped_medium_cookie: 0,
+        has_large_cookie: 0,
+        equipped_large_cookie: 0,
+        is_blocked: 0,
+        achieved_100: 0,
+        achieved_500: 0,
+        achieved_1000: 0,
+        achieved_3000: 0,
+        achieved_5000: 0,
+        achieved_10000: 0,
+        internal_level: 0,
+        active_quest: null,
+        completed_quests: []
+      };
+      showLoading();
+    }, 500);
+  }
+
+  function formatDateYMD(d){
+    var y=d.getFullYear();
+    var m=('0'+(d.getMonth()+1)).slice(-2);
+    var day=('0'+d.getDate()).slice(-2);
+    return y+'-'+m+'-'+day;
+  }
+
+function checkKey() {
+  var t = translations[currentLanguage];
+  var input = document.getElementById('inputText').value.trim();
+  var today = new Date();
+  var keyForToday = keys[formatDateYMD(today)];
+
+  // Проверяем, есть ли ключ на сегодня
+  if (!keyForToday) {
+    // Получаем все даты из ключей и сортируем
+    const allDates = Object.keys(keys).sort();
+    const lastDate = allDates[allDates.length - 1];
+    const todayStr = formatDateYMD(today);
+
+    // Если сегодняшняя дата меньше или равна последней — не показываем ошибку
+    if (todayStr <= lastDate) {
+      console.warn(`Ключ для ${todayStr} не найден, но список ключей ещё не закончился (${lastDate})`);
+    } else {
+      // Если уже за пределами последней даты
+      const parts = lastDate.split("-");
+      const formattedLastDate = `${parts[2]}.${parts[1]}.${parts[0]}`;
+      alert(`❗ Ключи закончились! Последний доступный ключ был на ${formattedLastDate}`);
+      return; // ✅ теперь return стоит ВНУТРИ функции
+    }
+  }
+
+  // Проверяем введённый ключ
+  if (input === keyForToday) {
+    alert(t.keyCorrect);
+    document.getElementById('keyContainer').classList.add('fade-out');
+    setTimeout(() => {
+      document.getElementById('keyContainer').style.display = 'none';
+      document.getElementById('authContainer').style.display = 'block';
+      setTimeout(() => {
+        document.getElementById('authContainer').classList.add('fade-in');
+      }, 10);
+    }, 500);
+  } else {
+    alert(t.keyIncorrect);
+  }
+} // 🔥 ← ЭТА ЗАКРЫВАЮЩАЯ СКОБКА ОБЯЗАТЕЛЬНО ДОЛЖНА БЫТЬ
+
+
+
+  function dragElement(el) {
+    var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    var headers = el.getElementsByTagName('h3');
+    var header = headers.length > 0 ? headers[0] : null;
+    if (header) {
+      header.onmousedown = mouseDown;
+    }
+
+    function mouseDown(e) {
+      e = e || window.event;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      document.onmouseup = stopElementDrag;
+      document.onmousemove = elementDrag;
+    }
+
+    function elementDrag(e) {
+      e = e || window.event;
+      pos1 = pos3 - e.clientX;
+      pos2 = pos4 - e.clientY;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      el.style.top = (el.offsetTop - pos2) + "px";
+      el.style.left = (el.offsetLeft - pos1) + "px";
+    }
+
+    function stopElementDrag() {
+      document.onmouseup = null;
+      document.onmousemove = null;
+    }
+  }
+
+  var users = {};
+  var currentUsername = '';
+  var count = 0;
+  var money = 0;
+  var internal_level = 0;
+  var quests = [
+    { id: 1, reward: 300, timeLimit: 60, clicksRequired: 500 },
+    { id: 2, reward: 150, timeLimit: 30, clicksRequired: 275 },
+    { id: 3, reward: 400, timeLimit: 90, clicksRequired: 800 },
+    { id: 4, reward: 100, timeLimit: 12, clicksRequired: 100 },
+    { id: 5, reward: 200, timeLimit: 35, clicksRequired: 300 },
+    { id: 6, reward: 50, timeLimit: 23, clicksRequired: 130 },
+    { id: 7, reward: 500, timeLimit: 10, clicksRequired: 100 },
+    { id: 8, reward: 250, timeLimit: 28, clicksRequired: 250 },
+    { id: 9, reward: 500, timeLimit: 110, clicksRequired: 1000 }
+  ];
+  var questStartTime = null;
+  var questClicks = 0;
+  var questTimerInterval = null;
+
+  // Update quest descriptions based on language
+  function updateQuestDescriptions() {
+    var t = translations[currentLanguage];
+    quests.forEach(q => {
+      q.description = t.questDescTemplate.replace('{required}', q.clicksRequired).replace('{time}', q.timeLimit);
+    });
+  }
+
+  function formatInternalLevel(th) {
+    var whole = Math.floor(th / 1000);
+    var frac = th % 1000;
+    if (frac === 0) {
+      return whole.toString();
+    } else {
+      var fracStr = frac.toString().padStart(3, '0').replace(/0+$/, '');
+      return whole + '.' + fracStr;
+    }
+  }
+
+  function getCurrentUser() {
+    return isDemo ? demoUser : users[currentUsername];
+  }
+
+  function trim(str) {
+    return str.replace(/^\s+|\s+$/g, '');
+  }
+
+  function showMsg(elemId, text, success) {
+    var msg = document.getElementById(elemId);
+    msg.style.color = success ? 'green' : 'red';
+    msg.innerText = text;
+  }
+
+  function showRegister() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('registerScreen').style.display = 'block';
+    document.getElementById('regUsername').value = '';
+    document.getElementById('regPassword').value = '';
+    showMsg('registerMsg', '', true);
+    showMsg('loginMsg', '', true);
+  }
+
+  function showLogin() {
+    document.getElementById('registerScreen').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'block';
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    showMsg('loginMsg', '', true);
+    showMsg('registerMsg', '', true);
+  }
+
+  function loadUsers() {
+    users = {};
+    try {
+      var storedUsers = localStorage.getItem('clickerUsers');
+      if (storedUsers) {
+        var lines = storedUsers.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          var parts = line.split(":");
+          if (parts.length > 1) {
+            var username = trim(parts[0]);
+            var password = trim(parts[1]);
+            var count = trim(parts[2] || '0');
+            var has_small_cookie = trim(parts[3] || '0');
+            var equipped_small_cookie = trim(parts[4] || '0');
+            var has_medium_cookie = trim(parts[5] || '0');
+            var equipped_medium_cookie = trim(parts[6] || '0');
+            var has_large_cookie = trim(parts[7] || '0');
+            var equipped_large_cookie = trim(parts[8] || '0');
+            var is_blocked = trim(parts[9] || '0');
+            var achieved_100 = trim(parts[10] || '0');
+            var achieved_500 = trim(parts[11] || '0');
+            var achieved_1000 = trim(parts[12] || '0');
+            var achieved_3000 = trim(parts[13] || '0');
+            var achieved_5000 = trim(parts[14] || '0');
+            var achieved_10000 = trim(parts[15] || '0');
+            var money = trim(parts[16] || '0');
+            var level_str = trim(parts[17] || '0');
+            var active_quest = trim(parts[18] || 'null');
+            var completed_quests = trim(parts[19] || '').split(',').filter(id => id !== '').map(id => parseInt(id));
+            var internal_level;
+            if (level_str.includes('.')) {
+              internal_level = Math.round(parseFloat(level_str) * 1000);
+            } else {
+              internal_level = parseInt(level_str, 10) || 0;
+            }
+            if (username !== "" && username !== "Demo") { // Exclude Demo from loading
+              users[username] = {
+                password: password,
+                count: count,
+                money: money,
+                internal_level: internal_level,
+                has_small_cookie: parseInt(has_small_cookie),
+                equipped_small_cookie: parseInt(equipped_small_cookie),
+                has_medium_cookie: parseInt(has_medium_cookie),
+                equipped_medium_cookie: parseInt(equipped_medium_cookie),
+                has_large_cookie: parseInt(has_large_cookie),
+                equipped_large_cookie: parseInt(equipped_large_cookie),
+                is_blocked: parseInt(is_blocked),
+                achieved_100: parseInt(achieved_100),
+                achieved_500: parseInt(achieved_500),
+                achieved_1000: parseInt(achieved_1000),
+                achieved_3000: parseInt(achieved_3000),
+                achieved_5000: parseInt(achieved_5000),
+                achieved_10000: parseInt(achieved_10000),
+                active_quest: active_quest === 'null' ? null : parseInt(active_quest),
+                completed_quests: completed_quests
+              };
+            }
+          }
+        }
+      }
+    } catch(e) {
+      alert("Error loading users: " + e.message);
+    }
+  }
+
+  function writeUsers() {
+    if (isDemo) return; // Do not save in demo mode
+    try {
+      var data = '';
+      for (var username in users) {
+        if (username === 'Demo') continue; // Skip Demo
+        var info = users[username];
+        data += username + ":" + info.password + ":" + info.count + ":" + 
+          info.has_small_cookie + ":" + info.equipped_small_cookie + ":" +
+          info.has_medium_cookie + ":" + info.equipped_medium_cookie + ":" +
+          info.has_large_cookie + ":" + info.equipped_large_cookie + ":" +
+          info.is_blocked + ":" + info.achieved_100 + ":" + info.achieved_500 + ":" + info.achieved_1000 + ":" +
+          info.achieved_3000 + ":" + info.achieved_5000 + ":" + info.achieved_10000 + ":" +
+          info.money + ":" + info.internal_level + ":" + (info.active_quest === null ? 'null' : info.active_quest) + ":" +
+          info.completed_quests.join(',') + "\n";
+      }
+      localStorage.setItem('clickerUsers', data);
+    } catch(e) {
+      alert("Error saving users: " + e.message);
+    }
+  }
+
+  function saveUser(username, password) {
+    users[username] = {
+      password: password,
       count: "0",
       money: "0",
       internal_level: 0,
@@ -231,340 +1518,264 @@ async function doRegister() {
       active_quest: null,
       completed_quests: []
     };
-    await setDoc(docRef, initial);
-    showMsg('registerMsg', t.registrationSuccess, true);
-    // автоматически продолжаем в игру (последует onAuthStateChanged -> afterLogin)
-  } catch (err) {
-    console.error('register err', err);
-    let msg = err.message || 'Ошибка регистрации';
-    showMsg('registerMsg', msg, false);
-  }
-}
-
-/* doLogin: логин через Firebase Auth */
-async function doLogin() {
-  var t = translations[currentLanguage];
-  const nick = document.getElementById('loginUsername').value.trim();
-  const pass = document.getElementById('loginPassword').value;
-  if (!nick || !pass) {
-    showMsg('loginMsg', t.enterUsernamePassword, false);
-    return;
-  }
-  const email = nickToEmail(nick);
-  try {
-    const cred = await signInWithEmailAndPassword(auth, email, pass);
-    showMsg('loginMsg', t.loginSuccess, true);
-    // onAuthStateChanged обработает дальнейшую загрузку
-  } catch (err) {
-    console.error('login err', err);
-    showMsg('loginMsg', err.message || 'Ошибка входа', false);
-  }
-}
-
-/* doLogout: разлогинивание, отписка от слушателя */
-async function doLogout() {
-  try {
-    if (userDocUnsub) {
-      userDocUnsub();
-      userDocUnsub = null;
-    }
-    await signOut(auth);
-    firebaseUser = null;
-    userDocRef = null;
-    // сбросить локальное состояние
-    currentUsername = '';
-    // скрыть игровую часть и показать экран логина
-    document.getElementById('gameScreen').style.display = 'none';
-    document.getElementById('authContainer').style.display = 'block';
-    document.getElementById('authContainer').classList.add('fade-in');
-  } catch (err) {
-    console.error('logout err', err);
-  }
-}
-
-/* afterLogin: вызывается при успешном auth; настраивает listener на документ */
-async function afterLogin(user) {
-  firebaseUser = user;
-  userDocRef = doc(db, 'users', user.uid);
-
-  // если в localStorage есть старые данные — мигрируем их один раз
-  try {
-    if (!migratedFromLocal) {
-      migrateLocalIfExist(user);
-      migratedFromLocal = true;
-    }
-  } catch (e) {
-    console.warn('migration error', e);
+    writeUsers();
   }
 
-  // убедимся, что документ существует; если нет — создадим минимальный
-  try {
-    const snap = await getDoc(userDocRef);
-    if (!snap.exists()) {
-      const nick = (user.email || '').split('@')[0];
-      await setDoc(userDocRef, {
-        nick: nick,
-        email: user.email || '',
-        createdAt: serverTimestamp(),
-        count: "0",
-        money: "0",
-        internal_level: 0,
-        has_small_cookie: 0,
-        equipped_small_cookie: 0,
-        has_medium_cookie: 0,
-        equipped_medium_cookie: 0,
-        has_large_cookie: 0,
-        equipped_large_cookie: 0,
-        is_blocked: 0,
-        achieved_100: 0,
-        achieved_500: 0,
-        achieved_1000: 0,
-        achieved_3000: 0,
-        achieved_5000: 0,
-        achieved_10000: 0,
-        active_quest: null,
-        completed_quests: []
-      });
-    }
-  } catch (e) {
-    console.error('ensure doc', e);
+  function showLoading() {
+    var t = translations[currentLanguage];
+    document.getElementById('authContainer').classList.remove('fade-in');
+    setTimeout(() => {
+      document.getElementById('authContainer').style.display = 'none';
+      document.getElementById('loadingScreen').style.display = 'block';
+      document.getElementById('loadingScreen').classList.add('visible');
+    }, 500);
+    var dots = 0;
+    var loadingInterval = setInterval(function() {
+      dots = (dots + 1) % 4; // Cycle from 0 to 3
+      var text = t.loadingText;
+      for (var i = 0; i < dots; i++) {
+        text += '.';
+      }
+      document.getElementById('loadingText').innerText = text;
+    }, 500); // Change every 0.5 seconds
+
+    setTimeout(function() {
+      clearInterval(loadingInterval); // Stop animation
+      showGame();
+    }, 5000);
   }
 
-  // realtime listener: обновляем локальный users[currentUsername] при изменениях
-  if (userDocUnsub) userDocUnsub();
-  userDocUnsub = onSnapshot(userDocRef, (docSnap) => {
-    if (!docSnap.exists()) return;
-    const d = docSnap.data();
+  function showBlocked() {
+    renderBlocked();
+    document.getElementById('authContainer').style.display = 'none';
+    document.getElementById('blockedMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('blockedMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('blockedMenu'));
+  }
 
-    // ставим currentUsername равным nick из документа
-    currentUsername = d.nick || (user.email ? user.email.split('@')[0] : '');
-    // обновляем локальную структуру users[currentUsername]
-    users[currentUsername] = {
-      password: '***', // пароль не храним тут
-      count: String(d.count ?? "0"),
-      money: String(d.money ?? "0"),
-      internal_level: d.internal_level ?? 0,
-      has_small_cookie: d.has_small_cookie ?? 0,
-      equipped_small_cookie: d.equipped_small_cookie ?? 0,
-      has_medium_cookie: d.has_medium_cookie ?? 0,
-      equipped_medium_cookie: d.equipped_medium_cookie ?? 0,
-      has_large_cookie: d.has_large_cookie ?? 0,
-      equipped_large_cookie: d.equipped_large_cookie ?? 0,
-      is_blocked: d.is_blocked ?? 0,
-      achieved_100: d.achieved_100 ?? 0,
-      achieved_500: d.achieved_500 ?? 0,
-      achieved_1000: d.achieved_1000 ?? 0,
-      achieved_3000: d.achieved_3000 ?? 0,
-      achieved_5000: d.achieved_5000 ?? 0,
-      achieved_10000: d.achieved_10000 ?? 0,
-      active_quest: d.active_quest === null ? null : d.active_quest,
-      completed_quests: Array.isArray(d.completed_quests) ? d.completed_quests : []
-    };
+  function renderBlocked() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.blockedTitle + '</h3>';
+    content += '<p>' + t.blockedText + '</p>';
+    content += '<button onclick="doLogout()">' + t.logoutButton + '</button>';
+    document.getElementById('blockedMenu').innerHTML = content;
+  }
 
-    // если игра запущена — обновим UI
-    if (document.getElementById('gameScreen').style.display !== 'none') {
-      const userLoc = getCurrentUser();
-      count = parseFloat(userLoc.count) || 0;
-      money = parseFloat(userLoc.money) || 0;
-      internal_level = userLoc.internal_level || 0;
+  function showGame() {
+    var t = translations[currentLanguage];
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    setTimeout(() => { document.getElementById('gameScreen').classList.add('visible'); }, 10);
+    var user = getCurrentUser();
+    if (user) {
+      count = parseFloat(user.count) || 0;
+      money = parseFloat(user.money) || 0;
+      internal_level = user.internal_level || 0;
       updateCounter();
       updateMoney();
       updateLevel();
       updateCurrentQuest();
+      if (user.active_quest !== null) {
+        startQuestTimer();
+        startQuestUpdateInterval();
+      }
     } else {
-      // показать auth -> loading -> game
-      showLoading();
+      alert(t.userNotFoundAlert);
     }
-  }, (err) => { console.error('onSnapshot error', err); });
 
-  // скрыть экран логина, начать загрузку игры (анимация)
-  document.getElementById('authContainer').classList.remove('fade-in');
-  setTimeout(() => {
-    document.getElementById('authContainer').style.display = 'none';
-    showLoading();
-  }, 300);
-}
+    // Remove admin button if exists
+    var existingAdminButton = document.getElementById('adminButton');
+    if (existingAdminButton) {
+      existingAdminButton.parentNode.removeChild(existingAdminButton);
+    }
 
-/* migrateLocalIfExist: если старые данные в localStorage (clickerUsers) — переносим в Firestore одного пользователя */
-async function migrateLocalIfExist(user) {
-  try {
-    const storedUsers = localStorage.getItem('clickerUsers');
-    if (!storedUsers) return;
-    // parse as original format
-    const lines = storedUsers.split('\n');
-    for (let i=0;i<lines.length;i++){
-      const line = lines[i].trim();
-      if (!line) continue;
-      const parts = line.split(':');
-      if (parts.length < 2) continue;
-      const username = parts[0].trim();
-      if (!username) continue;
-      // if username matches email nickname for current user, migrate that line
-      const nick = (user.email || '').split('@')[0];
-      if (username !== nick) continue;
-      // build doc data from parts (same logic as loadUsers)
-      const password = parts[1] || '';
-      const countVal = parts[2] || '0';
-      const has_small_cookie = parseInt(parts[3]||'0');
-      const equipped_small_cookie = parseInt(parts[4]||'0');
-      const has_medium_cookie = parseInt(parts[5]||'0');
-      const equipped_medium_cookie = parseInt(parts[6]||'0');
-      const has_large_cookie = parseInt(parts[7]||'0');
-      const equipped_large_cookie = parseInt(parts[8]||'0');
-      const is_blocked = parseInt(parts[9]||'0');
-      const achieved_100 = parseInt(parts[10]||'0');
-      const achieved_500 = parseInt(parts[11]||'0');
-      const achieved_1000 = parseInt(parts[12]||'0');
-      const achieved_3000 = parseInt(parts[13]||'0');
-      const achieved_5000 = parseInt(parts[14]||'0');
-      const achieved_10000 = parseInt(parts[15]||'0');
-      const moneyStr = parts[16] || '0';
-      const level_str = parts[17] || '0';
-      const active_quest = (parts[18] && parts[18] !== 'null') ? parseInt(parts[18]) : null;
-      const completed_quests = (parts[19]||'').split(',').filter(x => x !== '').map(x=>parseInt(x));
-      let internal_level = 0;
-      if (String(level_str).includes('.')) internal_level = Math.round(parseFloat(level_str) * 1000);
-      else internal_level = parseInt(level_str) || 0;
+    // Add admin button only for Admin
+    if (currentUsername === 'Admin') {
+      var adminButton = document.createElement('button');
+      adminButton.id = 'adminButton';
+      adminButton.innerText = t.adminPanelTitle;
+      adminButton.onclick = showAdminPanel;
+      adminButton.style.position = 'absolute';
+      adminButton.style.top = '0px';
+      adminButton.style.right = '10px';
+      adminButton.style.fontSize = '16px';
+      adminButton.style.padding = '8px 16px';
+      adminButton.style.backgroundColor = '#FF00FF'; // Magenta for admin
+      document.getElementById('gameScreen').appendChild(adminButton);
+    }
 
-      const docRef = doc(db, 'users', user.uid);
-      const payload = {
-        nick: nick,
-        email: user.email || nickToEmail(nick),
-        count: String(countVal),
-        money: String(moneyStr),
-        internal_level: internal_level,
-        has_small_cookie: has_small_cookie,
-        equipped_small_cookie: equipped_small_cookie,
-        has_medium_cookie: has_medium_cookie,
-        equipped_medium_cookie: equipped_medium_cookie,
-        has_large_cookie: has_large_cookie,
-        equipped_large_cookie: equipped_large_cookie,
-        is_blocked: is_blocked,
-        achieved_100: achieved_100,
-        achieved_500: achieved_500,
-        achieved_1000: achieved_1000,
-        achieved_3000: achieved_3000,
-        achieved_5000: achieved_5000,
-        achieved_10000: achieved_10000,
-        active_quest: active_quest,
-        completed_quests: completed_quests,
-        migratedAt: serverTimestamp()
-      };
-      await setDoc(docRef, payload, { merge: true });
-      // optionally remove local entry for cleanliness (commented out in case user wants fallback)
-      // localStorage.removeItem('clickerUsers');
-      console.log('Migrated local data for', nick);
+    // Remove demo elements if exist
+    var existingDemoLabel = document.getElementById('demoLabel');
+    if (existingDemoLabel) {
+      existingDemoLabel.parentNode.removeChild(existingDemoLabel);
+    }
+    var existingDemoTimer = document.getElementById('demoTimer');
+    if (existingDemoTimer) {
+      existingDemoTimer.parentNode.removeChild(existingDemoTimer);
+    }
+
+    // Reset positions to default every time
+    document.getElementById('shopButton').style.top = '0px';
+    document.getElementById('inventoryButton').style.top = '40px';
+    document.getElementById('questsButton').style.top = '80px';
+
+    // Reset promo button to default
+    document.getElementById('promoButton').disabled = false;
+    document.getElementById('promoButton').style.backgroundColor = '#2196F3';
+    document.getElementById('promoButton').onclick = showPromo;
+
+    if (isDemo) {
+      var demoLabel = document.createElement('div');
+      demoLabel.id = 'demoLabel';
+      demoLabel.innerText = t.demoLabel;
+      demoLabel.style.position = 'absolute';
+      demoLabel.style.top = '10px';
+      demoLabel.style.left = '10px';
+      demoLabel.style.color = 'blue';
+      demoLabel.style.fontSize = '18px';
+      demoLabel.style.fontWeight = 'bold';
+      document.getElementById('gameScreen').appendChild(demoLabel);
+
+      var demoTimer = document.createElement('div');
+      demoTimer.id = 'demoTimer';
+      demoTimer.style.position = 'absolute';
+      demoTimer.style.top = '40px';
+      demoTimer.style.left = '10px';
+      demoTimer.style.color = 'red';
+      demoTimer.style.fontSize = '16px';
+      demoTimer.style.fontWeight = 'bold';
+      document.getElementById('gameScreen').appendChild(demoTimer);
+      updateDemoTimer();
+      if (!isInfiniteDemo) {
+        demoTimerInterval = setInterval(updateDemoTimer, 1000);
+      } else {
+        document.getElementById('demoTimer').innerText = t.demoTimerInfinity;
+      }
+
+      // Shift buttons down
+      document.getElementById('shopButton').style.top = '60px';
+      document.getElementById('inventoryButton').style.top = '100px';
+      document.getElementById('questsButton').style.top = '140px';
+
+      // Disable promo in demo
+      document.getElementById('promoButton').disabled = true;
+      document.getElementById('promoButton').style.backgroundColor = 'gray';
+      document.getElementById('promoButton').onclick = function() { alert(t.promoDisabledInDemo); };
+    }
+  }
+
+  function updateDemoTimer() {
+    var t = translations[currentLanguage];
+    if (demoTimeLeft <= 0) {
+      clearInterval(demoTimerInterval);
+      showDemoExpired();
       return;
     }
-  } catch(e) {
-    console.warn('migration failed', e);
+    var minutes = Math.floor(demoTimeLeft / 60);
+    var seconds = demoTimeLeft % 60;
+    document.getElementById('demoTimer').innerText = t.demoTimer + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    demoTimeLeft--;
   }
-}
 
-/* writeUsers: раньше писал в localStorage; теперь обновляет Firestore документ текущего пользователя */
-async function writeUsers() {
-  if (isDemo) return; // demo mode does not persist
-  if (!firebaseUser || !userDocRef) {
-    console.warn('writeUsers: no firebase user');
-    return;
+  function showDemoExpired() {
+    renderDemoExpired();
+    document.getElementById('demoExpiredMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('demoExpiredMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('demoExpiredMenu'));
+    // Hide game screen
+    document.getElementById('gameScreen').classList.remove('visible');
+    setTimeout(() => { document.getElementById('gameScreen').style.display = 'none'; }, 500);
+    demoJustExpired = true;
   }
-  try {
-    const u = getCurrentUser();
-    const payload = {
-      // сохраняем те поля, которые игра использует
-      count: String(u.count || "0"),
-      money: String(u.money || "0"),
-      internal_level: u.internal_level || 0,
-      has_small_cookie: u.has_small_cookie || 0,
-      equipped_small_cookie: u.equipped_small_cookie || 0,
-      has_medium_cookie: u.has_medium_cookie || 0,
-      equipped_medium_cookie: u.equipped_medium_cookie || 0,
-      has_large_cookie: u.has_large_cookie || 0,
-      equipped_large_cookie: u.equipped_large_cookie || 0,
-      is_blocked: u.is_blocked || 0,
-      achieved_100: u.achieved_100 || 0,
-      achieved_500: u.achieved_500 || 0,
-      achieved_1000: u.achieved_1000 || 0,
-      achieved_3000: u.achieved_3000 || 0,
-      achieved_5000: u.achieved_5000 || 0,
-      achieved_10000: u.achieved_10000 || 0,
-      active_quest: u.active_quest === null ? null : u.active_quest,
-      completed_quests: Array.isArray(u.completed_quests) ? u.completed_quests : []
-    };
-    await setDoc(userDocRef, payload, { merge: true });
-  } catch(e) {
-    console.error('writeUsers -> firestore error', e);
-  }
-}
 
-/* Helper: atomic increment for clicks (used в increment()) */
-async function incrementClicksBy(n) {
-  if (isDemo) {
-    // demo mode: локально
-    count += n;
-    const user = getCurrentUser();
-    user.count = String(count);
-    updateCounter();
-    checkAchievements(currentUsername);
-    writeUsers(); // does nothing for demo
-    return;
+  function renderDemoExpired() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.demoExpiredTitle + '</h3>';
+    content += '<p>' + t.demoExpiredText + '</p>';
+    content += '<button onclick="returnToKey()">' + t.ok + '</button>';
+    document.getElementById('demoExpiredMenu').innerHTML = content;
   }
-  if (!userDocRef) {
-    console.warn('incrementClicksBy: no userDocRef');
-    return;
+
+  function returnToKey() {
+    document.getElementById('demoExpiredMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('demoExpiredMenu').style.display = 'none'; }, 500);
+    document.getElementById('gameScreen').classList.remove('visible');
+    setTimeout(() => { document.getElementById('gameScreen').style.display = 'none'; }, 500);
+    document.getElementById('keyContainer').style.display = 'block';
+    document.getElementById('keyContainer').style.opacity = '1';
+    document.getElementById('keyContainer').style.transform = 'translateY(0)';
+    document.getElementById('keyContainer').classList.remove('fade-out');
+    document.getElementById('authContainer').style.display = 'none';
+    document.getElementById('authContainer').classList.remove('fade-in');
+    isDemo = false;
+    demoUser = null;
+    currentUsername = '';
+    count = 0;
+    money = 0;
+    internal_level = 0;
+    if (demoTimerInterval) clearInterval(demoTimerInterval);
+    isInfiniteDemo = false;
   }
-  try {
-    // Atomic increment in Firestore
-    await updateDoc(userDocRef, { count: fbIncrement(n) });
-    // локальное обновление UI будет выполнено через onSnapshot listener
-  } catch (e) {
-    console.error('incrementClicksBy error', e);
+
+  function updateCounter() {
+    var t = translations[currentLanguage];
+    document.getElementById('counter').innerText = t.counter + count;
   }
-}
 
-/* ============================
-   Hook auth state changes
-   ============================ */
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    afterLogin(user);
-  } else {
-    // показ экрана логина (authContainer)
-    document.getElementById('authContainer').style.display = 'block';
-    document.getElementById('authContainer').classList.add('fade-in');
-    // скрыть gameScreen
-    document.getElementById('gameScreen').style.display = 'none';
+  function updateMoney() {
+    var t = translations[currentLanguage];
+    document.getElementById('money').innerText = t.money + money;
   }
-});
 
-/* ============================
-   Переопределённые места в игре
-   ============================
-   - increment() теперь вызывает incrementClicksBy(1)
-   - buySmallCookie / buyMediumCookie / buyLargeCookie теперь делают updateDoc
-   - takeQuest / cancelQuest / finish quest -> используют writeUsers() (т.е. сохраняют в firestore)
-   ================================================== */
+  function updateLevel() {
+    var t = translations[currentLanguage];
+    document.getElementById('level').innerText = t.level + formatInternalLevel(internal_level);
+  }
 
-/* ====== Пример перехвата функции increment (твоя UI вызывает её) ====== */
-function increment() {
-  // старая логика:(увеличение кликов и обновление UI + достижения)
-  // теперь делаем атомарный инкремент в Firestore (или локально для demo)
-  incrementClicksBy(1);
-  // увеличиваем локально счетчики (он обновится через onSnapshot)
-  // при желании можно локально сразу инкрементить отображение для более быстрой реакции:
-  // (необязательно, onSnapshot обычно моментален)
-}
+  function showShop() {
+    renderShop();
+    document.getElementById('shopMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('shopMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('shopMenu'));
+  }
 
-/* ====== Переопределение покупок (buySmallCookie, buyMediumCookie, buyLargeCookie) ======
-   - Пример: buySmallCookie теперь делает проверку на достаточность count через getDoc и updateDoc
-*/
-async function buySmallCookie() {
-  var t = translations[currentLanguage];
-  if (isDemo) {
+  function renderShop() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    var content = '<h3>' + t.shopTitle + '</h3>';
+    content += '<p>' + t.smallCookie + ' - 300 clicks</p>';
+    if (!user.has_small_cookie) {
+      content += '<button onclick="buySmallCookie()">' + t.buy + '</button>';
+    } else {
+      content += '<p>' + t.bought + '</p>';
+    }
+    content += '<p>' + t.mediumCookie + ' - 700 clicks</p>';
+    if (!user.has_medium_cookie) {
+      content += '<button onclick="buyMediumCookie()">' + t.buy + '</button>';
+    } else {
+      content += '<p>' + t.bought + '</p>';
+    }
+    content += '<p>' + t.largeCookie + ' - 1000 clicks</p>';
+    if (!user.has_large_cookie) {
+      content += '<button onclick="buyLargeCookie()">' + t.buy + '</button>';
+    } else {
+      content += '<p>' + t.bought + '</p>';
+    }
+    content += '<br><button onclick="closeShop()">' + t.close + '</button>';
+    document.getElementById('shopMenu').innerHTML = content;
+  }
+
+  function closeShop() {
+    document.getElementById('shopMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('shopMenu').style.display = 'none'; }, 500); // Longer transition
+  }
+
+  function buySmallCookie() {
+    var t = translations[currentLanguage];
     if (count >= 300) {
       count -= 300;
       var user = getCurrentUser();
-      user.count = String(count);
+      user.count = count.toString();
       user.has_small_cookie = 1;
       writeUsers();
       updateCounter();
@@ -573,35 +1784,14 @@ async function buySmallCookie() {
     } else {
       alert(t.notEnoughClicks);
     }
-    return;
   }
-  // firestore path
-  try {
-    if (!userDocRef) { alert(t.userNotFoundAlert); return; }
-    const snap = await getDoc(userDocRef);
-    if (!snap.exists()) { alert(t.userNotFoundAlert); return; }
-    const data = snap.data();
-    const currentCount = parseFloat(data.count || 0);
-    if (currentCount < 300) { alert(t.notEnoughClicks); return; }
-    await updateDoc(userDocRef, {
-      count: fbIncrement(-300),
-      has_small_cookie: 1
-    });
-    alert(t.boughtSuccess);
-    renderShop();
-  } catch (e) {
-    console.error('buySmallCookie err', e);
-    alert(t.notEnoughClicks);
-  }
-}
 
-async function buyMediumCookie() {
-  var t = translations[currentLanguage];
-  if (isDemo) {
+  function buyMediumCookie() {
+    var t = translations[currentLanguage];
     if (count >= 700) {
       count -= 700;
       var user = getCurrentUser();
-      user.count = String(count);
+      user.count = count.toString();
       user.has_medium_cookie = 1;
       writeUsers();
       updateCounter();
@@ -610,34 +1800,14 @@ async function buyMediumCookie() {
     } else {
       alert(t.notEnoughClicks);
     }
-    return;
   }
-  try {
-    if (!userDocRef) { alert(t.userNotFoundAlert); return; }
-    const snap = await getDoc(userDocRef);
-    if (!snap.exists()) { alert(t.userNotFoundAlert); return; }
-    const data = snap.data();
-    const currentCount = parseFloat(data.count || 0);
-    if (currentCount < 700) { alert(t.notEnoughClicks); return; }
-    await updateDoc(userDocRef, {
-      count: fbIncrement(-700),
-      has_medium_cookie: 1
-    });
-    alert(t.boughtSuccess);
-    renderShop();
-  } catch (e) {
-    console.error('buyMediumCookie err', e);
-    alert(t.notEnoughClicks);
-  }
-}
 
-async function buyLargeCookie() {
-  var t = translations[currentLanguage];
-  if (isDemo) {
+  function buyLargeCookie() {
+    var t = translations[currentLanguage];
     if (count >= 1000) {
       count -= 1000;
       var user = getCurrentUser();
-      user.count = String(count);
+      user.count = count.toString();
       user.has_large_cookie = 1;
       writeUsers();
       updateCounter();
@@ -646,40 +1816,897 @@ async function buyLargeCookie() {
     } else {
       alert(t.notEnoughClicks);
     }
+  }
+
+  function showInventory() {
+    renderInventory();
+    document.getElementById('inventoryMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('inventoryMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('inventoryMenu'));
+  }
+
+  function renderInventory() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    var content = '<h3>' + t.inventoryTitle + '</h3>';
+    var hasItems = false;
+    if (user.has_small_cookie) {
+      hasItems = true;
+      content += '<p>' + t.smallCookie;
+      if (user.equipped_small_cookie) {
+        content += t.equipped + ' <button onclick="unequipSmallCookie()">' + t.unequip + '</button>';
+      } else {
+        content += ' <button onclick="equipSmallCookie()">' + t.equip + '</button>';
+      }
+      content += '</p>';
+    }
+    if (user.has_medium_cookie) {
+      hasItems = true;
+      content += '<p>' + t.mediumCookie;
+      if (user.equipped_medium_cookie) {
+        content += t.equipped + ' <button onclick="unequipMediumCookie()">' + t.unequip + '</button>';
+      } else {
+        content += ' <button onclick="equipMediumCookie()">' + t.equip + '</button>';
+      }
+      content += '</p>';
+    }
+    if (user.has_large_cookie) {
+      hasItems = true;
+      content += '<p>' + t.largeCookie;
+      if (user.equipped_large_cookie) {
+        content += t.equipped + ' <button onclick="unequipLargeCookie()">' + t.unequip + '</button>';
+      } else {
+        content += ' <button onclick="equipLargeCookie()">' + t.equip + '</button>';
+      }
+      content += '</p>';
+    }
+    if (!hasItems) {
+      content += '<p>' + t.inventoryEmpty + '</p>';
+    }
+    content += '<button onclick="closeInventory()">' + t.close + '</button>';
+    document.getElementById('inventoryMenu').innerHTML = content;
+  }
+
+  function closeInventory() {
+    document.getElementById('inventoryMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('inventoryMenu').style.display = 'none'; }, 500);
+  }
+
+  function equipSmallCookie() {
+    var user = getCurrentUser();
+    user.equipped_small_cookie = 1;
+    writeUsers();
+    renderInventory();
+  }
+
+  function unequipSmallCookie() {
+    var user = getCurrentUser();
+    user.equipped_small_cookie = 0;
+    writeUsers();
+    renderInventory();
+  }
+
+  function equipMediumCookie() {
+    var user = getCurrentUser();
+    user.equipped_medium_cookie = 1;
+    writeUsers();
+    renderInventory();
+  }
+
+  function unequipMediumCookie() {
+    var user = getCurrentUser();
+    user.equipped_medium_cookie = 0;
+    writeUsers();
+    renderInventory();
+  }
+
+  function equipLargeCookie() {
+    var user = getCurrentUser();
+    user.equipped_large_cookie = 1;
+    writeUsers();
+    renderInventory();
+  }
+
+  function unequipLargeCookie() {
+    var user = getCurrentUser();
+    user.equipped_large_cookie = 0;
+    writeUsers();
+    renderInventory();
+  }
+
+  function showAdminPanel() {
+    renderAdminPanel();
+    document.getElementById('adminMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('adminMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('adminMenu'));
+  }
+
+  function renderAdminPanel() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.adminPanelTitle + '</h3>';
+    content += '<input id="targetUsername" type="text" placeholder="' + t.targetUsernamePlaceholder + '" />';
+    content += '<br><button onclick="showIssueClicks()">' + t.issueClicks + '</button><br>';
+    content += '<button onclick="showIssueCookie()">' + t.issueCookie + '</button><br>';
+    content += '<button onclick="showIssueAchievement()">' + t.issueAchievement + '</button><br>';
+    content += '<button onclick="blockAccount()">' + t.block + '</button>';
+    content += '<button onclick="unblockAccount()" style="margin-left:10px;">' + t.unblock + '</button><br>';
+    content += '<button onclick="resetCount()">' + t.resetClicks + '</button><br>';
+    content += '<button onclick="closeAdminPanel()">' + t.close + '</button>';
+    document.getElementById('adminMenu').innerHTML = content;
+  }
+
+  function closeAdminPanel() {
+    document.getElementById('adminMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('adminMenu').style.display = 'none'; }, 500);
+  }
+
+  function showIssueClicks() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.issueClicksTitle + '</h3>';
+    content += '<input id="clickAmount" type="number" placeholder="' + t.clickAmountPlaceholder + '" />';
+    content += '<br><button onclick="confirmIssueClicks()">' + t.issue + '</button>';
+    content += '<button onclick="closeIssueClicks()">' + t.close + '</button>';
+    document.getElementById('issueClicksMenu').innerHTML = content;
+    document.getElementById('issueClicksMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('issueClicksMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('issueClicksMenu'));
+  }
+
+  function closeIssueClicks() {
+    document.getElementById('issueClicksMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('issueClicksMenu').style.display = 'none'; }, 500);
+  }
+
+  function showIssueCookie() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.issueCookieTitle + '</h3>';
+    content += '<button onclick="confirmIssueCookie(1)">' + t.small + '</button>';
+    content += '<button onclick="confirmIssueCookie(2)">' + t.medium + '</button>';
+    content += '<button onclick="confirmIssueCookie(3)">' + t.large + '</button>';
+    content += '<br><button onclick="closeIssueCookie()">' + t.close + '</button>';
+    document.getElementById('issueCookieMenu').innerHTML = content;
+    document.getElementById('issueCookieMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('issueCookieMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('issueCookieMenu'));
+  }
+
+  function closeIssueCookie() {
+    document.getElementById('issueCookieMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('issueCookieMenu').style.display = 'none'; }, 500);
+  }
+
+  function showIssueAchievement() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.issueAchievementTitle + '</h3>';
+    content += '<button onclick="confirmIssueAchievement(1)">' + t.achievement100 + '</button>';
+    content += '<button onclick="confirmIssueAchievement(2)">' + t.achievement500 + '</button>';
+    content += '<button onclick="confirmIssueAchievement(3)">' + t.achievement1000 + '</button>';
+    content += '<button onclick="confirmIssueAchievement(4)">' + t.achievement3000 + '</button>';
+    content += '<button onclick="confirmIssueAchievement(5)">' + t.achievement5000 + '</button>';
+    content += '<button onclick="confirmIssueAchievement(6)">' + t.achievement10000 + '</button>';
+    content += '<br><button onclick="closeIssueAchievement()">' + t.close + '</button>';
+    document.getElementById('issueAchievementMenu').innerHTML = content;
+    document.getElementById('issueAchievementMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('issueAchievementMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('issueAchievementMenu'));
+  }
+
+  function closeIssueAchievement() {
+    document.getElementById('issueAchievementMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('issueAchievementMenu').style.display = 'none'; }, 500);
+  }
+
+  function getTargetUser() {
+    var t = translations[currentLanguage];
+    var target = trim(document.getElementById('targetUsername').value);
+    if (target === '') {
+      alert(t.enterUsername);
+      return null;
+    }
+    if (isDemo && target === 'Demo') {
+      return 'Demo'; // Special handling for demo
+    }
+    if (!users[target]) {
+      alert(t.userNotFound);
+      return null;
+    }
+    return target;
+  }
+
+  function getUser(target) {
+    if (isDemo && target === 'Demo') {
+      return demoUser;
+    }
+    return users[target];
+  }
+
+  function confirmIssueClicks() {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var amountStr = document.getElementById('clickAmount').value;
+      var amount = parseInt(amountStr);
+      if (isNaN(amount) || amount <= 0) {
+        alert(t.invalidAmount);
+        return;
+      }
+      var user = getUser(target);
+      var currentCount = parseFloat(user.count) || 0;
+      user.count = (currentCount + amount).toString();
+      checkAchievements(target);
+      writeUsers();
+      alert(t.issuedClicks.replace('{amount}', amount).replace('{target}', target));
+      if (target === currentUsername) {
+        count = parseFloat(user.count);
+        updateCounter();
+      }
+      closeIssueClicks();
+    }
+  }
+
+  function confirmIssueCookie(choice) {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var user = getUser(target);
+      if (choice === 1) {
+        user.has_small_cookie = 1;
+        alert(t.issuedCookieSmall.replace('{target}', target));
+      } else if (choice === 2) {
+        user.has_medium_cookie = 1;
+        alert(t.issuedCookieMedium.replace('{target}', target));
+      } else if (choice === 3) {
+        user.has_large_cookie = 1;
+        alert(t.issuedCookieLarge.replace('{target}', target));
+      }
+      writeUsers();
+      closeIssueCookie();
+    }
+  }
+
+  function confirmIssueAchievement(choice) {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var user = getUser(target);
+      var name;
+      if (choice === 1) {
+        user.achieved_100 = 1;
+        name = t.achievement100;
+      } else if (choice === 2) {
+        user.achieved_500 = 1;
+        name = t.achievement500;
+      } else if (choice === 3) {
+        user.achieved_1000 = 1;
+        name = t.achievement1000;
+      } else if (choice === 4) {
+        user.achieved_3000 = 1;
+        name = t.achievement3000;
+      } else if (choice === 5) {
+        user.achieved_5000 = 1;
+        name = t.achievement5000;
+      } else if (choice === 6) {
+        user.achieved_10000 = 1;
+        name = t.achievement10000;
+      }
+      alert(t.issuedAchievement.replace('{name}', name).replace('{target}', target));
+      writeUsers();
+      closeIssueAchievement();
+    }
+  }
+
+  function blockAccount() {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var user = getUser(target);
+      user.is_blocked = 1;
+      writeUsers();
+      alert(t.blocked.replace('{target}', target));
+    }
+  }
+
+  function unblockAccount() {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var user = getUser(target);
+      user.is_blocked = 0;
+      writeUsers();
+      alert(t.unblocked.replace('{target}', target));
+    }
+  }
+
+  function resetCount() {
+    var t = translations[currentLanguage];
+    var target = getTargetUser();
+    if (target) {
+      var user = getUser(target);
+      user.count = '0';
+      user.achieved_100 = 0;
+      user.achieved_500 = 0;
+      user.achieved_1000 = 0;
+      user.achieved_3000 = 0;
+      user.achieved_5000 = 0;
+      user.achieved_10000 = 0;
+      writeUsers();
+      alert(t.clicksReset.replace('{target}', target));
+      if (target === currentUsername) {
+        count = 0;
+        updateCounter();
+      }
+    }
+  }
+
+ async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  const t = translations[currentLanguage];
+
+  if (!username || !password) {
+    showMsg('loginMsg', t.enterUsernamePassword, false);
     return;
   }
+
   try {
-    if (!userDocRef) { alert(t.userNotFoundAlert); return; }
-    const snap = await getDoc(userDocRef);
-    if (!snap.exists()) { alert(t.userNotFoundAlert); return; }
-    const data = snap.data();
-    const currentCount = parseFloat(data.count || 0);
-    if (currentCount < 1000) { alert(t.notEnoughClicks); return; }
-    await updateDoc(userDocRef, {
-      count: fbIncrement(-1000),
-      has_large_cookie: 1
-    });
-    alert(t.boughtSuccess);
-    renderShop();
-  } catch (e) {
-    console.error('buyLargeCookie err', e);
-    alert(t.notEnoughClicks);
+    const email = `${username}@clicker.com`;
+    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const user = userCredential.user;
+
+    // Загружаем прогресс
+    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      currentUsername = data.username;
+      count = data.count || 0;
+      money = data.money || 0;
+      internal_level = data.level || 0;
+      showMsg('loginMsg', t.loginSuccess, true);
+      showLoading();
+    } else {
+      showMsg('loginMsg', t.userNotFound, false);
+    }
+  } catch (error) {
+    showMsg('loginMsg', t.invalidUsernamePassword, false);
   }
 }
 
-/* ====== takeQuest / cancelQuest и другие уже в коде вызывают writeUsers(); 
-         writeUsers теперь сохраняет в firestore. Поэтому основная логика заданий осталась прежней. ====== */
 
-/* =========================
-   Остальной твой оригинальный код
-   (init(), renderShop(), renderInventory(), renderQuests(), showGame(), updateXXX(), и т.д.)
-   — вставлен сюда **без изменений**. 
-   В файле, который ты скачиваешь, весь оригинальный JS сохраняется ниже.
-   ========================= */
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value.trim();
+  const t = translations[currentLanguage];
 
+  if (!username || !password) {
+    showMsg('registerMsg', t.enterUsernamePassword, false);
+    return;
+  }
+
+  try {
+    const email = `${username}@clicker.com`;
+    const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+    const user = userCredential.user;
+
+    // Создаём профиль игрока
+    await setDoc(doc(firebaseDB, "users", user.uid), {
+      username: username,
+      count: 0,
+      money: 0,
+      level: 0
+    });
+
+    showMsg('registerMsg', t.registrationSuccess, true);
+    setTimeout(showLogin, 1500);
+  } catch (error) {
+    if (error.code === "auth/email-already-in-use") {
+      showMsg('registerMsg', t.userExists, false);
+    } else {
+      showMsg('registerMsg', error.message, false);
+    }
+  }
+}
+
+
+  function doLogout() {
+    var t = translations[currentLanguage];
+    if (currentUsername && !isDemo && users[currentUsername]) {
+      users[currentUsername].count = count.toString();
+      users[currentUsername].money = money.toString();
+      users[currentUsername].internal_level = internal_level;
+      writeUsers();
+    }
+    currentUsername = '';
+    count = 0;
+    money = 0;
+    internal_level = 0;
+    if (questTimerInterval) clearInterval(questTimerInterval);
+    if (questUpdateInterval) clearInterval(questUpdateInterval);
+    if (demoTimerInterval) clearInterval(demoTimerInterval);
+    document.getElementById('gameScreen').classList.remove('visible');
+    setTimeout(() => { document.getElementById('gameScreen').style.display = 'none'; }, 500);
+    document.getElementById('blockedMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('blockedMenu').style.display = 'none'; }, 500);
+    document.getElementById('pauseOverlay').style.display = 'none';
+    isPaused = false;
+    if (isDemo) {
+      returnToKey();
+    } else {
+      document.getElementById('keyContainer').style.display = 'none';
+      document.getElementById('keyContainer').style.opacity = '1';
+      document.getElementById('keyContainer').style.transform = 'translateY(0)';
+      document.getElementById('keyContainer').classList.remove('fade-out');
+      document.getElementById('authContainer').style.display = 'block';
+      showLogin();
+      setTimeout(() => {
+        document.getElementById('authContainer').classList.add('fade-in');
+      }, 10);
+    }
+  }
+
+  function checkAchievements(target) {
+    var t = translations[currentLanguage];
+    var user = getUser(target);
+    var userCount = parseFloat(user.count) || 0;
+    var achievements = [
+      { threshold: 100, field: 'achieved_100', name: t.achievement100, amount: 100 },
+      { threshold: 500, field: 'achieved_500', name: t.achievement500, amount: 500 },
+      { threshold: 1000, field: 'achieved_1000', name: t.achievement1000, amount: 1000 },
+      { threshold: 3000, field: 'achieved_3000', name: t.achievement3000, amount: 3000 },
+      { threshold: 5000, field: 'achieved_5000', name: t.achievement5000, amount: 5000 },
+      { threshold: 10000, field: 'achieved_10000', name: t.achievement10000, amount: 10000 }
+    ];
+    achievements.forEach(ach => {
+      if (userCount >= ach.threshold && !user[ach.field]) {
+        user[ach.field] = 1;
+        if (target === currentUsername) alert(t.achievementUnlocked.replace('{name}', ach.name).replace('{amount}', ach.amount));
+      }
+    });
+  }
+
+  function increment() {
+    if (isPaused) return;
+    var user = getCurrentUser();
+    var multiplier = 1;
+    if (user.equipped_small_cookie) multiplier *= 1.5;
+    if (user.equipped_medium_cookie) multiplier *= 2;
+    if (user.equipped_large_cookie) multiplier *= 2.5;
+    count += multiplier;
+    internal_level += 1;
+    if (user.active_quest !== null) {
+      questClicks += multiplier;
+      checkQuestCompletion();
+    }
+    updateCounter();
+    updateLevel();
+    user.count = count.toString();
+    user.internal_level = internal_level;
+    checkAchievements(currentUsername);
+    writeUsers();
+  }
+
+  function showAchievements() {
+    renderAchievements();
+    document.getElementById('achievementsMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('achievementsMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('achievementsMenu'));
+  }
+
+  function renderAchievements() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    var content = '<h3>' + t.achievementsTitle + '</h3>';
+    content += '<p>' + t.achievement100Desc + (user.achieved_100 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<p>' + t.achievement500Desc + (user.achieved_500 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<p>' + t.achievement1000Desc + (user.achieved_1000 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<p>' + t.achievement3000Desc + (user.achieved_3000 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<p>' + t.achievement5000Desc + (user.achieved_5000 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<p>' + t.achievement10000Desc + (user.achieved_10000 ? t.achieved : t.notAchieved) + '</p>';
+    content += '<button onclick="closeAchievements()">' + t.close + '</button>';
+    document.getElementById('achievementsMenu').innerHTML = content;
+  }
+
+  function closeAchievements() {
+    document.getElementById('achievementsMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('achievementsMenu').style.display = 'none'; }, 500);
+  }
+
+  function showPromo() {
+    var t = translations[currentLanguage];
+    if (isDemo) {
+      alert(t.promoDisabledInDemo);
+      return;
+    }
+    renderPromo();
+    document.getElementById('promoMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('promoMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('promoMenu'));
+  }
+
+  function renderPromo() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.promoTitle + '</h3>';
+    content += '<input id="promoCode" type="text" placeholder="' + t.promoPlaceholder + '" />';
+    content += '<br><button onclick="redeemPromo()">' + t.redeem + '</button>';
+    content += '<button onclick="closePromo()">' + t.close + '</button>';
+    document.getElementById('promoMenu').innerHTML = content;
+  }
+
+  function closePromo() {
+    document.getElementById('promoMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('promoMenu').style.display = 'none'; }, 500);
+  }
+
+  function redeemPromo() {
+    var t = translations[currentLanguage];
+    var code = trim(document.getElementById('promoCode').value).toUpperCase();
+    var user = getCurrentUser();
+    if (code === 'LYSUKA') {
+      user.has_small_cookie = 1;
+      alert(t.promoSmallCookie);
+    } else if (code === 'KOT') {
+      count += 100;
+      user.count = count.toString();
+      updateCounter();
+      checkAchievements(currentUsername);
+      alert(t.promo100Clicks);
+    } else if (code === 'SUKA') {
+      user.has_large_cookie = 1;
+      alert(t.promoLargeCookie);
+    } else {
+      alert(t.invalidPromo);
+      return;
+    }
+    writeUsers();
+    closePromo();
+  }
+
+  // Console
+  function toggleConsole() {
+    var consoleMenu = document.getElementById('consoleMenu');
+    if (consoleMenu.style.display === 'block') {
+      closeConsole();
+    } else {
+      renderConsole();
+      consoleMenu.style.display = 'block';
+      setTimeout(() => { consoleMenu.classList.add('open'); }, 10);
+      dragElement(consoleMenu);
+    }
+  }
+
+  function renderConsole() {
+    var t = translations[currentLanguage];
+    var content = '<h3>' + t.consoleTitle + '</h3>';
+    content += '<input id="consoleInput" type="text" placeholder="' + t.consolePlaceholder + '" />';
+    content += '<br><button onclick="executeConsoleCommand()">' + t.execute + '</button>';
+    content += '<button onclick="closeConsole()">' + t.close + '</button>';
+    document.getElementById('consoleMenu').innerHTML = content;
+  }
+
+  function closeConsole() {
+    var consoleMenu = document.getElementById('consoleMenu');
+    consoleMenu.classList.remove('open');
+    setTimeout(() => { consoleMenu.style.display = 'none'; }, 500);
+  }
+
+  function executeConsoleCommand() {
+    var t = translations[currentLanguage];
+    var command = trim(document.getElementById('consoleInput').value).toLowerCase();
+    if (command === '') {
+      alert(t.enterCommand);
+      return;
+    }
+    var user = getCurrentUser();
+    if (command.startsWith('click:set(')) {
+      var match = command.match(/click:set\((\d+)\)/);
+      if (match) {
+        var amount = parseInt(match[1]);
+        if (!isNaN(amount) && amount >= 0) {
+          count = amount;
+          user.count = count.toString();
+          checkAchievements(currentUsername);
+          writeUsers();
+          updateCounter();
+          alert(t.setClicksSuccess.replace('{amount}', amount));
+        } else {
+          alert(t.invalidNumber);
+        }
+      } else {
+        alert(t.invalidFormat.replace('{format}', 'click:set(число)'));
+      }
+    } else if (command === 'give:cookie.small') {
+      user.has_small_cookie = 1;
+      writeUsers();
+      alert(t.gaveSmallCookie);
+    } else if (command === 'give:cookie.medium') {
+      user.has_medium_cookie = 1;
+      writeUsers();
+      alert(t.gaveMediumCookie);
+    } else if (command === 'give:cookie.big') {
+      user.has_large_cookie = 1;
+      writeUsers();
+      alert(t.gaveLargeCookie);
+    } else if (command === 'demomode:exit') {
+      if (isDemo) {
+        closeConsole();
+        returnToKey();
+        alert(t.exitDemo);
+      } else {
+        alert(t.notInDemo);
+      }
+    } else if (command === 'autopasskey') {
+      if (document.getElementById('keyContainer').style.display === 'block') {
+        document.getElementById('keyContainer').classList.add('fade-out');
+        setTimeout(() => {
+          document.getElementById('keyContainer').style.display = 'none';
+          document.getElementById('authContainer').style.display = 'block';
+          setTimeout(() => {
+            document.getElementById('authContainer').classList.add('fade-in');
+            showRegister();
+          }, 10);
+        }, 500);
+        alert(t.autoPassKey);
+      } else {
+        alert(t.notInKeyMenu);
+      }
+    } else if (command.startsWith('demomode:edit_time:set(')) {
+      var match = command.match(/demomode:edit_time:set\((.+)\)/);
+      if (match) {
+        var timeStr = match[1].toLowerCase();
+        if (timeStr === 'infinity') {
+          if (isDemo) {
+            clearInterval(demoTimerInterval);
+            isInfiniteDemo = true;
+            document.getElementById('demoTimer').innerText = t.demoTimerInfinity;
+            alert(t.demoTimeInfinity);
+          } else {
+            alert(t.notInDemo);
+          }
+        } else {
+          var timeParts = timeStr.split(':');
+          if (timeParts.length === 3) {
+            var hours = parseInt(timeParts[0]);
+            var minutes = parseInt(timeParts[1]);
+            var seconds = parseInt(timeParts[2]);
+            if (!isNaN(hours) && !isNaN(minutes) && !isNaN(seconds) && hours >= 0 && minutes >= 0 && seconds >= 0) {
+              if (isDemo) {
+                demoTimeLeft = hours * 3600 + minutes * 60 + seconds;
+                if (isInfiniteDemo) {
+                  isInfiniteDemo = false;
+                  demoTimerInterval = setInterval(updateDemoTimer, 1000);
+                }
+                updateDemoTimer();
+                alert(t.demoTimeSet.replace('{time}', timeStr));
+              } else {
+                alert(t.notInDemo);
+              }
+            } else {
+              alert(t.invalidTimeFormat);
+            }
+          } else {
+            alert(t.invalidFormat.replace('{format}', 'demomode:edit_time:set(00:00:00) or demomode:edit_time:set(infinity)'));
+          }
+        }
+      } else {
+        alert(t.invalidFormat.replace('{format}', 'demomode:edit_time:set(00:00:00) or demomode:edit_time:set(infinity)'));
+      }
+    } else {
+      alert(t.invalidCommand.replace('{command}', command));
+    }
+    document.getElementById('consoleInput').value = '';
+  }
+
+  // Quests
+  function showQuests() {
+    renderQuests();
+    document.getElementById('questsMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('questsMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('questsMenu'));
+  }
+
+  function renderQuests() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    var content = '<h3>' + t.questsTitle + '</h3>';
+    quests.forEach(function(quest) {
+      var isCompleted = user.completed_quests.includes(quest.id);
+      var isActive = user.active_quest === quest.id;
+      var status = isCompleted ? t.questCompleted : t.questNotCompleted;
+      content += '<p>' + status + ' ' + quest.description + ' reward: ' + quest.reward + ' money</p>';
+      if (!isCompleted) {
+        if (isActive) {
+          content += '<button onclick="cancelQuest(' + quest.id + ')">' + t.cancelQuest + '</button>';
+        } else {
+          content += '<button onclick="takeQuest(' + quest.id + ')">' + t.takeQuest + '</button>';
+        }
+      }
+      content += '<br>';
+    });
+    content += '<button onclick="closeQuests()">' + t.close + '</button>';
+    document.getElementById('questsMenu').innerHTML = content;
+  }
+
+  function closeQuests() {
+    document.getElementById('questsMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('questsMenu').style.display = 'none'; }, 500);
+  }
+
+  function takeQuest(questId) {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    if (user.active_quest !== null) {
+      alert(t.activeQuest);
+      return;
+    }
+    user.active_quest = questId;
+    questStartTime = Date.now();
+    questClicks = 0;
+    startQuestTimer();
+    startQuestUpdateInterval();
+    writeUsers();
+    updateCurrentQuest();
+    closeQuests();
+  }
+
+  function cancelQuest(questId) {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    if (user.active_quest === questId) {
+      user.active_quest = null;
+      if (questTimerInterval) clearInterval(questTimerInterval);
+      if (questUpdateInterval) clearInterval(questUpdateInterval);
+      writeUsers();
+      updateCurrentQuest();
+      alert(t.questCancelled);
+      renderQuests();
+    }
+  }
+
+  function startQuestTimer() {
+    if (questTimerInterval) clearInterval(questTimerInterval);
+    questTimerInterval = setInterval(checkQuestCompletion, 1000);
+  }
+
+  function startQuestUpdateInterval() {
+    if (questUpdateInterval) clearInterval(questUpdateInterval);
+    questUpdateInterval = setInterval(updateCurrentQuest, 1000);
+  }
+
+  function checkQuestCompletion() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    if (user.active_quest === null) return;
+    var quest = quests.find(q => q.id === user.active_quest);
+    if (!quest) return;
+    var elapsed = (Date.now() - questStartTime) / 1000;
+    if (elapsed > quest.timeLimit) {
+      alert(t.questTimeExpired);
+      user.active_quest = null;
+      if (questTimerInterval) clearInterval(questTimerInterval);
+      if (questUpdateInterval) clearInterval(questUpdateInterval);
+      writeUsers();
+      updateCurrentQuest();
+      return;
+    }
+    if (questClicks >= quest.clicksRequired) {
+      money += quest.reward;
+      internal_level += 500;
+      user.money = money.toString();
+      user.internal_level = internal_level;
+      user.completed_quests.push(quest.id);
+      user.active_quest = null;
+      if (questTimerInterval) clearInterval(questTimerInterval);
+      if (questUpdateInterval) clearInterval(questUpdateInterval);
+      writeUsers();
+      updateMoney();
+      updateLevel();
+      updateCurrentQuest();
+      alert(t.questCompletedSuccess.replace('{reward}', quest.reward));
+    }
+  }
+
+  function updateCurrentQuest() {
+    var t = translations[currentLanguage];
+    var user = getCurrentUser();
+    if (user.active_quest === null) {
+      document.getElementById('currentQuest').innerText = t.currentQuestNone;
+    } else {
+      var quest = quests.find(q => q.id === user.active_quest);
+      var remaining = Math.max(0, quest.timeLimit - Math.floor((Date.now() - questStartTime) / 1000));
+      document.getElementById('currentQuest').innerText = t.currentQuest.replace('{clicks}', questClicks).replace('{required}', quest.clicksRequired).replace('{remaining}', remaining);
+    }
+  }
+
+  // Pause
+  function pauseGame() {
+    if (isPaused) return;
+    isPaused = true;
+    pauseStartTime = Date.now();
+    var user = getCurrentUser();
+    wasQuestActive = (user.active_quest !== null);
+    wasDemoTimerActive = (isDemo && !isInfiniteDemo && demoTimerInterval !== null);
+    if (questTimerInterval) clearInterval(questTimerInterval);
+    if (questUpdateInterval) clearInterval(questUpdateInterval);
+    if (wasDemoTimerActive) clearInterval(demoTimerInterval);
+    document.getElementById('pauseOverlay').style.display = 'flex';
+  }
+
+  function resumeGame() {
+    if (!isPaused) return;
+    isPaused = false;
+    var pauseDuration = Date.now() - pauseStartTime;
+    var user = getCurrentUser();
+    if (wasQuestActive) {
+      questStartTime += pauseDuration;
+      startQuestTimer();
+      startQuestUpdateInterval();
+    }
+    if (wasDemoTimerActive) {
+      demoTimerInterval = setInterval(updateDemoTimer, 1000);
+    }
+    document.getElementById('pauseOverlay').style.display = 'none';
+  }
+
+  function showSettings() {
+    renderSettings();
+    document.getElementById('settingsMenu').style.display = 'block';
+    setTimeout(() => { document.getElementById('settingsMenu').classList.add('open'); }, 10);
+    dragElement(document.getElementById('settingsMenu'));
+  }
+
+  function renderSettings() {
+    var t = translations[currentLanguage];
+    var currentScale = localStorage.getItem('uiScale') || '1';
+    var content = '<h3>' + t.settingsTitle + '</h3>';
+    content += '<label for="uiScale">' + t.uiScaleLabel + '</label><br>';
+    content += '<select id="uiScale">';
+    content += '<option value="0.8"' + (currentScale === '0.8' ? ' selected' : '') + '>' + t.smallScale + '</option>';
+    content += '<option value="1"' + (currentScale === '1' ? ' selected' : '') + '>' + t.mediumScale + '</option>';
+    content += '<option value="1.2"' + (currentScale === '1.2' ? ' selected' : '') + '>' + t.largeScale + '</option>';
+    content += '</select><br>';
+    content += '<label for="languageSelect">' + t.languageLabel + '</label><br>';
+    content += '<select id="languageSelect">';
+    content += '<option value="ru"' + (currentLanguage === 'ru' ? ' selected' : '') + '>' + t.russian + '</option>';
+    content += '<option value="en"' + (currentLanguage === 'en' ? ' selected' : '') + '>' + t.english + '</option>';
+    content += '<option value="uk"' + (currentLanguage === 'uk' ? ' selected' : '') + '>' + t.ukrainian + '</option>';
+    content += '</select><br>';
+    content += '<button onclick="applySettings()">' + t.apply + '</button><br>';
+    content += '<button onclick="closeSettings()">' + t.close + '</button>';
+    document.getElementById('settingsMenu').innerHTML = content;
+  }
+
+  function applySettings() {
+    var scale = document.getElementById('uiScale').value;
+    localStorage.setItem('uiScale', scale);
+    document.body.style.transform = `scale(${scale})`;
+    document.body.style.width = `${100 / parseFloat(scale)}%`;
+    document.body.style.height = `${100 / parseFloat(scale)}%`;
+
+    var lang = document.getElementById('languageSelect').value;
+    setLanguage(lang);
+    closeSettings();
+  }
+
+  function closeSettings() {
+    document.getElementById('settingsMenu').classList.remove('open');
+    setTimeout(() => { document.getElementById('settingsMenu').style.display = 'none'; }, 500);
+  }
+
+  // Load users at start
+  loadUsers();
+
+  // Add Admin account if not exists
+  if (!users["Admin"]) {
+    saveUser("Admin", atob('enV5MjI4'));
+  }
+
+  // Update quest descriptions
+  updateQuestDescriptions();
+
+  window.onbeforeunload = function() {
+    if (currentUsername && !isDemo && users[currentUsername]) {
+      writeUsers();
+    }
+  };
 </script>
-
-<!-- === (Здесь в оригинале продолжается весь твой JavaScript — я оставил его целиком в итоговом файле) === -->
-
 </body>
 </html>
