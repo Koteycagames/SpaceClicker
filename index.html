@@ -14,20 +14,22 @@
     ref,
     set,
     get,
-    update,
-    child
+    child,
+    update
   } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
 
+  // === Конфигурация Firebase ===
   const firebaseConfig = {
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
     authDomain: "spaceclicker-78ef5.firebaseapp.com",
-    databaseURL: "https://spaceclicker-78ef5-default-rtdb.firebaseio.com",
     projectId: "spaceclicker-78ef5",
     storageBucket: "spaceclicker-78ef5.appspot.com",
     messagingSenderId: "1007817982727",
-    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
+    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2",
+    databaseURL: "https://spaceclicker-78ef5-default-rtdb.firebaseio.com"
   };
 
+  // === Инициализация Firebase ===
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getDatabase(app);
@@ -36,7 +38,6 @@
   async function doRegister() {
     const username = document.getElementById("regUsername").value.trim();
     const password = document.getElementById("regPassword").value.trim();
-    const email = `${username}@clicker.com`;
     const t = translations[currentLanguage];
 
     if (!username || !password) {
@@ -44,61 +45,60 @@
       return;
     }
 
+    const email = `${username}@clicker.com`;
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCred.user.uid;
       await set(ref(db, "users/" + uid), {
         username,
         count: 0,
         money: 0,
-        level: 0
+        level: 0,
+        createdAt: new Date().toISOString()
       });
       showMsg("registerMsg", t.registrationSuccess, true);
       showLogin();
-    } catch (err) {
-      if (err.code === "auth/email-already-in-use") {
-        showMsg("registerMsg", t.userExists, false);
-      } else {
-        showMsg("registerMsg", err.message, false);
-      }
+    } catch (error) {
+      showMsg("registerMsg", error.message, false);
+      console.error(error);
     }
   }
 
   // === Вход ===
-async function doLogin() {
-  const username = document.getElementById("loginUsername").value.trim();
-  const password = document.getElementById("loginPassword").value.trim();
-  const email = `${username}@clicker.com`;
-  const t = translations[currentLanguage];
+  async function doLogin() {
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value.trim();
+    const t = translations[currentLanguage];
 
-  if (!username || !password) {
-    showMsg("loginMsg", t.enterUsernamePassword, false);
-    return;
-  }
-
-  try {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    const uid = cred.user.uid;
-    const snap = await get(child(ref(db), "users/" + uid));
-    if (snap.exists()) {
-      const data = snap.val();
-      currentUsername = username;
-      count = data.count || 0;
-      money = data.money || 0;
-      internal_level = data.level || 0;
-      showMsg("loginMsg", t.loginSuccess, true);
-      setTimeout(showLoading, 500);
-    } else {
-      showMsg("loginMsg", t.userNotFound, false);
+    if (!username || !password) {
+      showMsg("loginMsg", t.enterUsernamePassword, false);
+      return;
     }
-  } catch (err) {
-    console.error(err);
-    showMsg("loginMsg", err.message, false);
+
+    const email = `${username}@clicker.com`;
+    try {
+      const userCred = await signInWithEmailAndPassword(auth, email, password);
+      const uid = userCred.user.uid;
+
+      const snapshot = await get(child(ref(db), "users/" + uid));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        currentUsername = data.username;
+        count = data.count || 0;
+        money = data.money || 0;
+        internal_level = data.level || 0;
+        showMsg("loginMsg", t.loginSuccess, true);
+        setTimeout(showLoading, 800);
+      } else {
+        showMsg("loginMsg", t.userNotFound, false);
+      }
+    } catch (error) {
+      showMsg("loginMsg", error.message, false);
+      console.error(error);
+    }
   }
-} // ← вот эта скобка у тебя отсутствует
 
-
-  // === Сохранение кликов ===
+  // === Сохранение прогресса ===
   async function increment() {
     count++;
     updateCounter();
@@ -111,17 +111,17 @@ async function doLogin() {
           money,
           level: internal_level
         });
-      } catch (err) {
-        console.error("Ошибка сохранения:", err);
+      } catch (error) {
+        console.error("Ошибка сохранения:", error);
       }
     }
   }
 
+  // === Делаем функции доступными ===
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
 </script>
-
 
 
 
@@ -1567,101 +1567,27 @@ function checkKey() {
     document.getElementById('blockedMenu').innerHTML = content;
   }
 
-async function showGame() {
-  const t = translations[currentLanguage];
-  document.getElementById('loadingScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display = 'block';
-  setTimeout(() => {
-    document.getElementById('gameScreen').classList.add('visible');
-  }, 10);
-
-  const user = auth.currentUser;
-  if (!user) {
-    alert(t.userNotFoundAlert);
-    showLogin();
-    return;
-  }
-
-  try {
-    const snapshot = await get(ref(db, "users/" + user.uid));
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      currentUsername = data.username || "Без имени";
-      count = data.count || 0;
-      money = data.money || 0;
-      internal_level = data.level || 0;
-
-      // обновляем все данные интерфейса
-      updateCounter?.();
-      updateMoney?.();
-      updateLevel?.();
-      updateShop?.();
-      updateInventory?.();
-      updateQuests?.();
-
-      console.log("✅ Прогресс загружен:", data);
+  function showGame() {
+    var t = translations[currentLanguage];
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    setTimeout(() => { document.getElementById('gameScreen').classList.add('visible'); }, 10);
+    var user = getCurrentUser();
+    if (user) {
+      count = parseFloat(user.count) || 0;
+      money = parseFloat(user.money) || 0;
+      internal_level = user.internal_level || 0;
+      updateCounter();
+      updateMoney();
+      updateLevel();
+      updateCurrentQuest();
+      if (user.active_quest !== null) {
+        startQuestTimer();
+        startQuestUpdateInterval();
+      }
     } else {
       alert(t.userNotFoundAlert);
     }
-  } catch (err) {
-    console.error("Ошибка при загрузке данных:", err);
-  }
-
-  // Добавляем кнопку админки
-  const existingAdminButton = document.getElementById('adminButton');
-  if (existingAdminButton) existingAdminButton.remove();
-
-  if (currentUsername === 'Admin') {
-    const adminButton = document.createElement('button');
-    adminButton.id = 'adminButton';
-    adminButton.innerText = t.adminPanelTitle;
-    adminButton.onclick = showAdminPanel;
-    adminButton.style.position = 'absolute';
-    adminButton.style.top = '0px';
-    adminButton.style.right = '10px';
-    adminButton.style.fontSize = '16px';
-    adminButton.style.padding = '8px 16px';
-    adminButton.style.backgroundColor = '#FF00FF';
-    document.getElementById('gameScreen').appendChild(adminButton);
-  }
-}
-
-
-      // Удаляем демо-лейблы/таймер, если вдруг остались
-      const existingDemoLabel = document.getElementById('demoLabel');
-      if (existingDemoLabel && existingDemoLabel.parentNode) {
-        existingDemoLabel.parentNode.removeChild(existingDemoLabel);
-      }
-      const existingDemoTimer = document.getElementById('demoTimer');
-      if (existingDemoTimer && existingDemoTimer.parentNode) {
-        existingDemoTimer.parentNode.removeChild(existingDemoTimer);
-      }
-
-      // Сбрасываем позиции кнопок (если элементы есть)
-      const shopBtn = document.getElementById('shopButton');
-      const invBtn = document.getElementById('inventoryButton');
-      const questsBtn = document.getElementById('questsButton');
-      if (shopBtn) shopBtn.style.top = '0px';
-      if (invBtn) invBtn.style.top = '40px';
-      if (questsBtn) questsBtn.style.top = '80px';
-
-      // Возвращаем промо-кнопку в дефолтное состояние (если есть)
-      const promoBtn = document.getElementById('promoButton');
-      if (promoBtn) {
-        promoBtn.disabled = false;
-        promoBtn.style.backgroundColor = '#2196F3';
-        promoBtn.onclick = showPromo;
-      }
-
-      console.log("✅ Данные игрока загружены:", data);
-    } else {
-      console.warn("⚠️ Нет данных в базе для этого пользователя.");
-    }
-  } catch (error) {
-    console.error("Ошибка загрузки данных:", error);
-  }
-}
-
 
     // Remove admin button if exists
     var existingAdminButton = document.getElementById('adminButton');
