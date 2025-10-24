@@ -20,19 +20,15 @@
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
     authDomain: "spaceclicker-78ef5.firebaseapp.com",
     projectId: "spaceclicker-78ef5",
-    storageBucket: "spaceclicker-78ef5.firebasestorage.app",
+    storageBucket: "spaceclicker-78ef5.appspot.com", // ✅ исправлено
     messagingSenderId: "1007817982727",
     appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
-  // Инициализация
+  // Инициализация Firebase
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-
-  // Можно оставить глобальные, если где-то ещё используются
-  window.firebaseAuth = auth;
-  window.firebaseDB = db;
 
   // === Регистрация пользователя ===
   async function doRegister() {
@@ -47,7 +43,7 @@
 
     const email = `${username}@clicker.com`;
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password); // ✅ auth
       const user = userCredential.user;
 
       await setDoc(doc(db, "users", user.uid), {
@@ -71,47 +67,43 @@
   }
 
   // === Вход пользователя ===
-async function doLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value.trim();
-  const t = translations[currentLanguage];
+  async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+    const t = translations[currentLanguage];
 
-  if (!username || !password) {
-    showMsg('loginMsg', t.enterUsernamePassword, false);
-    return;
-  }
-
-  const email = `${username}@clicker.com`;
-  try {
-    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const user = userCredential.user;
-
-    // Загружаем прогресс из Firestore
-    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      currentUsername = username;
-      count = data.count || 0;
-      money = data.money || 0;
-      internal_level = data.level || 0;
-
-      showMsg('loginMsg', t.loginSuccess, true);
-
-      // ⬇️ Ждём секунду, потом переходим в игру
-      setTimeout(() => {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('loadingScreen').style.display = 'block';
-        showLoading(); // запускаем игру
-      }, 800);
-    } else {
-      showMsg('loginMsg', t.userNotFound, false);
+    if (!username || !password) {
+      showMsg('loginMsg', t.enterUsernamePassword, false);
+      return;
     }
-  } catch (error) {
-    console.error(error);
-    showMsg('loginMsg', t.invalidUsernamePassword, false);
-  }
-}
 
+    const email = `${username}@clicker.com`;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password); // ✅ auth
+      const user = userCredential.user;
+
+      const userDoc = await getDoc(doc(db, "users", user.uid)); // ✅ db
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        currentUsername = username;
+        count = data.count || 0;
+        money = data.money || 0;
+        internal_level = data.level || 0;
+
+        showMsg('loginMsg', t.loginSuccess, true);
+        setTimeout(() => {
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('loadingScreen').style.display = 'block';
+          showLoading();
+        }, 800);
+      } else {
+        showMsg('loginMsg', t.userNotFound, false);
+      }
+    } catch (error) {
+      console.error(error);
+      showMsg('loginMsg', t.invalidUsernamePassword, false);
+    }
+  }
 
   // === Сохранение прогресса ===
   async function increment() {
@@ -133,11 +125,12 @@ async function doLogin() {
     }
   }
 
-  // Делаем функции доступными для onclick в HTML
+  // === Экспорт для кнопок ===
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
 </script>
+
 
 
   <style>
