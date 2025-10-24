@@ -65,37 +65,38 @@
   }
 
   // === Вход ===
-  async function doLogin() {
-    const username = document.getElementById("loginUsername").value.trim();
-    const password = document.getElementById("loginPassword").value.trim();
-    const email = `${username}@clicker.com`;
-    const t = translations[currentLanguage];
+async function doLogin() {
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value.trim();
+  const email = `${username}@clicker.com`;
+  const t = translations[currentLanguage];
 
-    if (!username || !password) {
-      showMsg("loginMsg", t.enterUsernamePassword, false);
-      return;
-    }
-
-    try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
-      const snap = await get(child(ref(db), "users/" + uid));
-      if (snap.exists()) {
-        const data = snap.val();
-        currentUsername = username;
-        count = data.count || 0;
-        money = data.money || 0;
-        internal_level = data.level || 0;
-        showMsg("loginMsg", t.loginSuccess, true);
-        setTimeout(showLoading, 500);
-      } else {
-        showMsg("loginMsg", t.userNotFound, false);
-      }
-    } catch (err) {
-      console.error(err);
-      showMsg("loginMsg", err.message, false);
-    }
+  if (!username || !password) {
+    showMsg("loginMsg", t.enterUsernamePassword, false);
+    return;
   }
+
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    const uid = cred.user.uid;
+    const snap = await get(child(ref(db), "users/" + uid));
+    if (snap.exists()) {
+      const data = snap.val();
+      currentUsername = username;
+      count = data.count || 0;
+      money = data.money || 0;
+      internal_level = data.level || 0;
+      showMsg("loginMsg", t.loginSuccess, true);
+      setTimeout(showLoading, 500);
+    } else {
+      showMsg("loginMsg", t.userNotFound, false);
+    }
+  } catch (err) {
+    console.error(err);
+    showMsg("loginMsg", err.message, false);
+  }
+} // ← вот эта скобка у тебя отсутствует
+
 
   // === Сохранение кликов ===
   async function increment() {
@@ -1599,6 +1600,56 @@ async function showGame() {
       updateInventory?.();
       updateQuests?.();
 
+      // --- всё, что раньше было снаружи функции showGame() ---
+
+      // Сносим старую админ-кнопку, если была
+      const existingAdminButton = document.getElementById('adminButton');
+      if (existingAdminButton && existingAdminButton.parentNode) {
+        existingAdminButton.parentNode.removeChild(existingAdminButton);
+      }
+
+      // Добавляем админ-кнопку только для Admin
+      if (currentUsername === 'Admin') {
+        const adminButton = document.createElement('button');
+        adminButton.id = 'adminButton';
+        adminButton.innerText = t.adminPanelTitle;
+        adminButton.onclick = showAdminPanel;
+        adminButton.style.position = 'absolute';
+        adminButton.style.top = '0px';
+        adminButton.style.right = '10px';
+        adminButton.style.fontSize = '16px';
+        adminButton.style.padding = '8px 16px';
+        adminButton.style.backgroundColor = '#FF00FF';
+        const gs = document.getElementById('gameScreen');
+        if (gs) gs.appendChild(adminButton);
+      }
+
+      // Удаляем демо-лейблы/таймер, если вдруг остались
+      const existingDemoLabel = document.getElementById('demoLabel');
+      if (existingDemoLabel && existingDemoLabel.parentNode) {
+        existingDemoLabel.parentNode.removeChild(existingDemoLabel);
+      }
+      const existingDemoTimer = document.getElementById('demoTimer');
+      if (existingDemoTimer && existingDemoTimer.parentNode) {
+        existingDemoTimer.parentNode.removeChild(existingDemoTimer);
+      }
+
+      // Сбрасываем позиции кнопок (если элементы есть)
+      const shopBtn = document.getElementById('shopButton');
+      const invBtn = document.getElementById('inventoryButton');
+      const questsBtn = document.getElementById('questsButton');
+      if (shopBtn) shopBtn.style.top = '0px';
+      if (invBtn) invBtn.style.top = '40px';
+      if (questsBtn) questsBtn.style.top = '80px';
+
+      // Возвращаем промо-кнопку в дефолтное состояние (если есть)
+      const promoBtn = document.getElementById('promoButton');
+      if (promoBtn) {
+        promoBtn.disabled = false;
+        promoBtn.style.backgroundColor = '#2196F3';
+        promoBtn.onclick = showPromo;
+      }
+
       console.log("✅ Данные игрока загружены:", data);
     } else {
       console.warn("⚠️ Нет данных в базе для этого пользователя.");
@@ -1607,6 +1658,7 @@ async function showGame() {
     console.error("Ошибка загрузки данных:", error);
   }
 }
+
 
     // Remove admin button if exists
     var existingAdminButton = document.getElementById('adminButton');
