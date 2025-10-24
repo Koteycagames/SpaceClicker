@@ -3,150 +3,119 @@
   <title>Clicker</title>
   <meta charset="utf-8">
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-  // --- Firebase config ---
+  // === Конфигурация Firebase ===
   const firebaseConfig = {
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
     authDomain: "spaceclicker-78ef5.firebaseapp.com",
     projectId: "spaceclicker-78ef5",
-    storageBucket: "spaceclicker-78ef5.appspot.com", // важно: appspot.com
+    storageBucket: "spaceclicker-78ef5.appspot.com",
     messagingSenderId: "1007817982727",
     appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
-  // --- Init ---
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db   = getFirestore(app);
+  const db = getFirestore(app);
 
-  // --- Глобальные переменные игры (через window, чтобы не падать в strict mode) ---
-  const S = window;
-  if (typeof S.count !== "number") S.count = 0;
-  if (typeof S.money !== "number") S.money = 0;
-  if (typeof S.internal_level !== "number") S.internal_level = 0;
-  if (typeof S.currentUsername !== "string") S.currentUsername = "";
-
-  // Безопасные сообщения (если translations/showMsg вдруг нет)
-  const tSafe = (key, def) => (S.translations?.[S.currentLanguage]?.[key]) ?? def;
-  const showSafe = (id, text, ok) => {
-    try { S.showMsg?.(id, text, ok); } catch { alert(text); }
-  };
-
-  // --- Регистрация ---
+  // === Регистрация ===
   async function doRegister() {
-    const username = document.getElementById('regUsername')?.value.trim() ?? "";
-    const password = document.getElementById('regPassword')?.value.trim() ?? "";
+    const username = document.getElementById("regUsername").value.trim();
+    const password = document.getElementById("regPassword").value.trim();
+    const t = translations[currentLanguage];
 
     if (!username || !password) {
-      showSafe('registerMsg', tSafe('enterUsernamePassword', 'Введите ник и пароль'), false);
+      showMsg("registerMsg", t.enterUsernamePassword, false);
       return;
     }
 
     const email = `${username}@clicker.com`;
     try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      const user = res.user;
-
-      await setDoc(doc(db, "users", user.uid), {
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db, "users", userCred.user.uid), {
         username,
         count: 0,
         money: 0,
         level: 0,
-        achievements: [],
         createdAt: new Date().toISOString()
       });
-
-      showSafe('registerMsg', tSafe('registrationSuccess', 'Регистрация успешна'), true);
-      S.showLogin?.();
-    } catch (error) {
-      console.error(error);
-      if (error?.code === 'auth/email-already-in-use') {
-        showSafe('registerMsg', tSafe('userExists', 'Такой пользователь уже есть'), false);
-      } else {
-        showSafe('registerMsg', error?.message ?? 'Ошибка регистрации', false);
-      }
+      showMsg("registerMsg", t.registrationSuccess, true);
+      showLogin();
+    } catch (e) {
+      showMsg("registerMsg", e.message, false);
+      console.error(e);
     }
   }
 
-  // --- Вход ---
+  // === Вход ===
   async function doLogin() {
-    const username = document.getElementById('loginUsername')?.value.trim() ?? "";
-    const password = document.getElementById('loginPassword')?.value.trim() ?? "";
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value.trim();
+    const t = translations[currentLanguage];
+    const email = `${username}@clicker.com`;
 
     if (!username || !password) {
-      showSafe('loginMsg', tSafe('enterUsernamePassword', 'Введите ник и пароль'), false);
+      showMsg("loginMsg", t.enterUsernamePassword, false);
       return;
     }
 
-    const email = `${username}@clicker.com`;
     try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      const user = res.user;
+      const userCred = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, "users", userCred.user.uid));
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        S.currentUsername  = data.username ?? username;
-        S.count            = typeof data.count  === 'number' ? data.count  : 0;
-        S.money            = typeof data.money  === 'number' ? data.money  : 0;
-        S.internal_level   = typeof data.level  === 'number' ? data.level  : 0;
-
-        showSafe('loginMsg', tSafe('loginSuccess', 'Успешный вход'), true);
-        setTimeout(() => { S.showLoading?.(); }, 800);
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        currentUsername = data.username;
+        count = data.count || 0;
+        money = data.money || 0;
+        internal_level = data.level || 0;
+        showMsg("loginMsg", t.loginSuccess, true);
+        setTimeout(showLoading, 800);
       } else {
-        // нет документа — создадим пустой и зайдём
-        await setDoc(doc(db, "users", user.uid), {
-          username,
-          count: 0,
-          money: 0,
-          level: 0,
-          achievements: [],
-          createdAt: new Date().toISOString()
-        });
-        S.currentUsername = username;
-        S.count = 0; S.money = 0; S.internal_level = 0;
-
-        showSafe('loginMsg', tSafe('loginSuccess', 'Успешный вход'), true);
-        setTimeout(() => { S.showLoading?.(); }, 800);
+        showMsg("loginMsg", t.userNotFound, false);
       }
-    } catch (error) {
-      console.error(error);
-      showSafe('loginMsg', tSafe('invalidUsernamePassword', 'Неверный ник или пароль'), false);
+    } catch (e) {
+      showMsg("loginMsg", e.message, false);
+      console.error(e);
     }
   }
 
-  // --- Сохранение прогресса на каждый клик ---
+  // === Сохранение прогресса ===
   async function increment() {
-    S.count++;
-    try { S.updateCounter?.(); } catch {}
+    count++;
+    updateCounter();
 
     const user = auth.currentUser;
     if (user) {
       try {
-        await setDoc(doc(db, "users", user.uid), {
-          username: S.currentUsername,
-          count: S.count,
-          money: S.money,
-          level: S.internal_level
-        }, { merge: true });
+        await setDoc(
+          doc(db, "users", user.uid),
+          { username: currentUsername, count, money, level: internal_level },
+          { merge: true }
+        );
       } catch (e) {
-        console.error("Ошибка сохранения данных:", e);
+        console.error("Ошибка сохранения:", e);
       }
     }
   }
 
-  // Экспорт для кнопок onclick
-  S.doRegister = doRegister;
-  S.doLogin    = doLogin;
-  S.increment  = increment;
+  // === Экспорт для HTML ===
+  window.doRegister = doRegister;
+  window.doLogin = doLogin;
+  window.increment = increment;
 </script>
-
-
-
-
 
   <style>
     html, body {
