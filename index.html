@@ -4,8 +4,17 @@
   <meta charset="utf-8">
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
@@ -16,108 +25,112 @@
     appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+  // Инициализация
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
 
-window.firebaseAuth = auth;
-window.firebaseDB = db;
-// === Регистрация пользователя ===
-async function doRegister() {
-  const username = document.getElementById('regUsername').value.trim();
-  const password = document.getElementById('regPassword').value.trim();
-  const t = translations[currentLanguage];
+  // Можно оставить глобальные, если где-то ещё используются
+  window.firebaseAuth = auth;
+  window.firebaseDB = db;
 
-  if (!username || !password) {
-    showMsg('registerMsg', t.enterUsernamePassword, false);
-    return;
-  }
+  // === Регистрация пользователя ===
+  async function doRegister() {
+    const username = document.getElementById('regUsername').value.trim();
+    const password = document.getElementById('regPassword').value.trim();
+    const t = translations[currentLanguage];
 
-  const email = `${username}@clicker.com`; // создаём "почту" из ника
-  try {
-    const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-    const user = userCredential.user;
-
-    // создаём документ в Firestore
-    await setDoc(doc(firebaseDB, "users", user.uid), {
-      username: username,
-      count: 0,
-      money: 0,
-      level: 0,
-      achievements: [],
-      createdAt: new Date().toISOString()
-    });
-
-    showMsg('registerMsg', t.registrationSuccess, true);
-    showLogin(); // переключаем обратно на вход
-  } catch (error) {
-    if (error.code === 'auth/email-already-in-use') {
-      showMsg('registerMsg', t.userExists, false);
-    } else {
-      showMsg('registerMsg', error.message, false);
+    if (!username || !password) {
+      showMsg('registerMsg', t.enterUsernamePassword, false);
+      return;
     }
-  }
-}
 
-
-// === Вход пользователя ===
-async function doLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value.trim();
-  const t = translations[currentLanguage];
-
-  if (!username || !password) {
-    showMsg('loginMsg', t.enterUsernamePassword, false);
-    return;
-  }
-
-  const email = `${username}@clicker.com`;
-  try {
-    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const user = userCredential.user;
-
-    // Загружаем прогресс из Firestore
-    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      currentUsername = username;
-      count = data.count || 0;
-      money = data.money || 0;
-      internal_level = data.level || 0;
-
-      showMsg('loginMsg', t.loginSuccess, true);
-      showLoading(); // запускаем игру
-    } else {
-      showMsg('loginMsg', t.userNotFound, false);
-    }
-  } catch (error) {
-    showMsg('loginMsg', t.invalidUsernamePassword, false);
-    console.error(error);
-  }
-}
-
-
-// === Обновление прогресса (при каждом клике) ===
-async function increment() {
-  count++;
-  updateCounter();
-
-  const user = firebaseAuth.currentUser;
-  if (user) {
+    const email = `${username}@clicker.com`;
     try {
-      await setDoc(doc(firebaseDB, "users", user.uid), {
-        username: currentUsername,
-        count: count,
-        money: money,
-        level: internal_level
-      }, { merge: true });
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, "users", user.uid), {
+        username,
+        count: 0,
+        money: 0,
+        level: 0,
+        achievements: [],
+        createdAt: new Date().toISOString()
+      });
+
+      showMsg('registerMsg', t.registrationSuccess, true);
+      showLogin();
     } catch (error) {
-      console.error("Ошибка сохранения данных:", error);
+      if (error.code === 'auth/email-already-in-use') {
+        showMsg('registerMsg', t.userExists, false);
+      } else {
+        showMsg('registerMsg', error.message, false);
+      }
     }
   }
-}
 
+  // === Вход пользователя ===
+  async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+    const t = translations[currentLanguage];
+
+    if (!username || !password) {
+      showMsg('loginMsg', t.enterUsernamePassword, false);
+      return;
+    }
+
+    const email = `${username}@clicker.com`;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        currentUsername = username;
+        count = data.count ?? 0;
+        money = data.money ?? 0;
+        internal_level = data.level ?? 0;
+
+        showMsg('loginMsg', t.loginSuccess, true);
+        showLoading();
+      } else {
+        showMsg('loginMsg', t.userNotFound, false);
+      }
+    } catch (error) {
+      showMsg('loginMsg', t.invalidUsernamePassword, false);
+      console.error(error);
+    }
+  }
+
+  // === Сохранение прогресса ===
+  async function increment() {
+    count++;
+    updateCounter();
+
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await setDoc(doc(db, "users", user.uid), {
+          username: currentUsername,
+          count,
+          money,
+          level: internal_level
+        }, { merge: true });
+      } catch (error) {
+        console.error("Ошибка сохранения данных:", error);
+      }
+    }
+  }
+
+  // Делаем функции доступными для onclick в HTML
+  window.doRegister = doRegister;
+  window.doLogin = doLogin;
+  window.increment = increment;
 </script>
+
 
   <style>
     html, body {
