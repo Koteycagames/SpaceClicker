@@ -16,6 +16,7 @@
     getDoc
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
+  // === Firebase config ===
   const firebaseConfig = {
     apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
     authDomain: "spaceclicker-78ef5.firebaseapp.com",
@@ -25,12 +26,12 @@
     appId: "1:1007817982727:web:c653b6f656b017cbb73ba2"
   };
 
-  // Инициализация Firebase
+  // === Init Firebase ===
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // === Регистрация пользователя ===
+  // === Register ===
   async function doRegister() {
     const username = document.getElementById('regUsername').value.trim();
     const password = document.getElementById('regPassword').value.trim();
@@ -42,8 +43,9 @@
     }
 
     const email = `${username}@clicker.com`;
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password); // ✅ auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       await setDoc(doc(db, "users", user.uid), {
@@ -58,15 +60,16 @@
       showMsg('registerMsg', t.registrationSuccess, true);
       showLogin();
     } catch (error) {
-      if (error.code === 'auth/email-already-in-use') {
-        showMsg('registerMsg', t.userExists, false);
+      console.error(error);
+      if (error.code === "auth/email-already-in-use") {
+        showMsg("registerMsg", t.userExists, false);
       } else {
-        showMsg('registerMsg', error.message, false);
+        showMsg("registerMsg", error.message, false);
       }
     }
   }
 
-  // === Вход пользователя ===
+  // === Login ===
   async function doLogin() {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
@@ -78,24 +81,22 @@
     }
 
     const email = `${username}@clicker.com`;
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password); // ✅ auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      const userDoc = await getDoc(doc(db, "users", user.uid)); // ✅ db
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+
       if (userDoc.exists()) {
         const data = userDoc.data();
-        currentUsername = username;
+        currentUsername = data.username;
         count = data.count || 0;
         money = data.money || 0;
         internal_level = data.level || 0;
 
         showMsg('loginMsg', t.loginSuccess, true);
-        setTimeout(() => {
-          document.getElementById('loginScreen').style.display = 'none';
-          document.getElementById('loadingScreen').style.display = 'block';
-          showLoading();
-        }, 800);
+        setTimeout(showLoading, 800);
       } else {
         showMsg('loginMsg', t.userNotFound, false);
       }
@@ -105,7 +106,7 @@
     }
   }
 
-  // === Сохранение прогресса ===
+  // === Save Progress ===
   async function increment() {
     count++;
     updateCounter();
@@ -125,11 +126,12 @@
     }
   }
 
-  // === Экспорт для кнопок ===
+  // === Export to HTML ===
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
 </script>
+
 
 
 
