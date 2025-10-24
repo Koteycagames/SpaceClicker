@@ -71,39 +71,47 @@
   }
 
   // === Вход пользователя ===
-  async function doLogin() {
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value.trim();
-    const t = translations[currentLanguage];
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  const t = translations[currentLanguage];
 
-    if (!username || !password) {
-      showMsg('loginMsg', t.enterUsernamePassword, false);
-      return;
-    }
-
-    const email = `${username}@clicker.com`;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        currentUsername = username;
-        count = data.count ?? 0;
-        money = data.money ?? 0;
-        internal_level = data.level ?? 0;
-
-        showMsg('loginMsg', t.loginSuccess, true);
-        showLoading();
-      } else {
-        showMsg('loginMsg', t.userNotFound, false);
-      }
-    } catch (error) {
-      showMsg('loginMsg', t.invalidUsernamePassword, false);
-      console.error(error);
-    }
+  if (!username || !password) {
+    showMsg('loginMsg', t.enterUsernamePassword, false);
+    return;
   }
+
+  const email = `${username}@clicker.com`;
+  try {
+    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const user = userCredential.user;
+
+    // Загружаем прогресс из Firestore
+    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      currentUsername = username;
+      count = data.count || 0;
+      money = data.money || 0;
+      internal_level = data.level || 0;
+
+      showMsg('loginMsg', t.loginSuccess, true);
+
+      // ⬇️ Ждём секунду, потом переходим в игру
+      setTimeout(() => {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('loadingScreen').style.display = 'block';
+        showLoading(); // запускаем игру
+      }, 800);
+    } else {
+      showMsg('loginMsg', t.userNotFound, false);
+    }
+  } catch (error) {
+    console.error(error);
+    showMsg('loginMsg', t.invalidUsernamePassword, false);
+  }
+}
+
 
   // === Сохранение прогресса ===
   async function increment() {
