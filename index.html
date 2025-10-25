@@ -186,6 +186,27 @@
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
+
+  // ... (предыдущий код остается без изменений до конца модуля)
+
+// === Делаем функции и переменные доступными глобально ===
+window.getCurrentUser = getCurrentUser;
+window.getUserByUsername = getUserByUsername;
+window.userData = userData; // Переменная userData должна быть доступна глобально
+window.currentUid = currentUid; // UID текущего пользователя
+
+// Добавляем остальные функции, которые используются
+window.showGame = showGame;
+window.checkQuestCompletion = checkQuestCompletion;
+window.checkAchievements = checkAchievements;
+window.renderInventory = renderInventory;
+window.showInventory = showInventory;
+window.renderQuests = renderQuests;
+window.showQuests = showQuests;
+window.renderShop = renderShop;
+window.showShop = showShop;
+window.renderAchievements = renderAchievements;
+window.showAchievements = showAchievements;
 </script>
 
 
