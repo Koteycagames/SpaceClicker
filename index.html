@@ -1060,7 +1060,7 @@
       invalidCommand: 'Невідома команда: {command}',
       setClicksSuccess: 'Кліки встановлено на {amount}',
       invalidNumber: 'Невірне число в команді!',
-      invalidFormat: 'Невірний формат команди! Використовуйте {format}',
+      invalidFormat: 'Невірний формат команды! Використовуйте {format}',
       gaveSmallCookie: 'Отримано маленьке печиво!',
       gaveMediumCookie: 'Отримано середнє печиво!',
       gaveLargeCookie: 'Отримано велике печиво!',
@@ -1682,9 +1682,14 @@ var encoded_keys = {
     const t = translations[currentLanguage];
     if (count >= 300) {
       count -= 300;
-      userData.count = count;
-      userData.has_small_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), { count: count, has_small_cookie: 1 });
+      if (isDemo) {
+        demoUser.count = count;
+        demoUser.has_small_cookie = 1;
+      } else {
+        userData.count = count;
+        userData.has_small_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), { count: count, has_small_cookie: 1 });
+      }
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1697,9 +1702,14 @@ var encoded_keys = {
     const t = translations[currentLanguage];
     if (count >= 700) {
       count -= 700;
-      userData.count = count;
-      userData.has_medium_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), { count: count, has_medium_cookie: 1 });
+      if (isDemo) {
+        demoUser.count = count;
+        demoUser.has_medium_cookie = 1;
+      } else {
+        userData.count = count;
+        userData.has_medium_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), { count: count, has_medium_cookie: 1 });
+      }
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1712,9 +1722,14 @@ var encoded_keys = {
     const t = translations[currentLanguage];
     if (count >= 1000) {
       count -= 1000;
-      userData.count = count;
-      userData.has_large_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), { count: count, has_large_cookie: 1 });
+      if (isDemo) {
+        demoUser.count = count;
+        demoUser.has_large_cookie = 1;
+      } else {
+        userData.count = count;
+        userData.has_large_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), { count: count, has_large_cookie: 1 });
+      }
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1778,38 +1793,62 @@ var encoded_keys = {
   }
 
   async function equipSmallCookie() {
-    userData.equipped_small_cookie = 1;
-    await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 1 });
+    if (isDemo) {
+      demoUser.equipped_small_cookie = 1;
+    } else {
+      userData.equipped_small_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 1 });
+    }
     renderInventory();
   }
 
   async function unequipSmallCookie() {
-    userData.equipped_small_cookie = 0;
-    await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 0 });
+    if (isDemo) {
+      demoUser.equipped_small_cookie = 0;
+    } else {
+      userData.equipped_small_cookie = 0;
+      await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 0 });
+    }
     renderInventory();
   }
 
   async function equipMediumCookie() {
-    userData.equipped_medium_cookie = 1;
-    await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 1 });
+    if (isDemo) {
+      demoUser.equipped_medium_cookie = 1;
+    } else {
+      userData.equipped_medium_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 1 });
+    }
     renderInventory();
   }
 
   async function unequipMediumCookie() {
-    userData.equipped_medium_cookie = 0;
-    await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 0 });
+    if (isDemo) {
+      demoUser.equipped_medium_cookie = 0;
+    } else {
+      userData.equipped_medium_cookie = 0;
+      await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 0 });
+    }
     renderInventory();
   }
 
   async function equipLargeCookie() {
-    userData.equipped_large_cookie = 1;
-    await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 1 });
+    if (isDemo) {
+      demoUser.equipped_large_cookie = 1;
+    } else {
+      userData.equipped_large_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 1 });
+    }
     renderInventory();
   }
 
   async function unequipLargeCookie() {
-    userData.equipped_large_cookie = 0;
-    await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 0 });
+    if (isDemo) {
+      demoUser.equipped_large_cookie = 0;
+    } else {
+      userData.equipped_large_cookie = 0;
+      await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 0 });
+    }
     renderInventory();
   }
 
@@ -2248,9 +2287,13 @@ var encoded_keys = {
         var amount = parseInt(match[1]);
         if (!isNaN(amount) && amount >= 0) {
           count = amount;
-          updates.count = count;
-          await update(ref(db, 'users/' + currentUid), updates);
-          Object.assign(userData, updates);
+          if (isDemo) {
+            demoUser.count = count;
+          } else {
+            updates.count = count;
+            await update(ref(db, 'users/' + currentUid), updates);
+            userData.count = count;
+          }
           checkAchievements(currentUsername);
           updateCounter();
           alert(t.setClicksSuccess.replace('{amount}', amount));
@@ -2261,19 +2304,31 @@ var encoded_keys = {
         alert(t.invalidFormat.replace('{format}', 'click:set(число)'));
       }
     } else if (command === 'give:cookie.small') {
-      updates.has_small_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), updates);
-      Object.assign(userData, updates);
+      if (isDemo) {
+        demoUser.has_small_cookie = 1;
+      } else {
+        updates.has_small_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), updates);
+        userData.has_small_cookie = 1;
+      }
       alert(t.gaveSmallCookie);
     } else if (command === 'give:cookie.medium') {
-      updates.has_medium_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), updates);
-      Object.assign(userData, updates);
+      if (isDemo) {
+        demoUser.has_medium_cookie = 1;
+      } else {
+        updates.has_medium_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), updates);
+        userData.has_medium_cookie = 1;
+      }
       alert(t.gaveMediumCookie);
     } else if (command === 'give:cookie.big') {
-      updates.has_large_cookie = 1;
-      await update(ref(db, 'users/' + currentUid), updates);
-      Object.assign(userData, updates);
+      if (isDemo) {
+        demoUser.has_large_cookie = 1;
+      } else {
+        updates.has_large_cookie = 1;
+        await update(ref(db, 'users/' + currentUid), updates);
+        userData.has_large_cookie = 1;
+      }
       alert(t.gaveLargeCookie);
     } else if (command === 'demomode:exit') {
       if (isDemo) {
@@ -2388,7 +2443,11 @@ var encoded_keys = {
       return;
     }
     user.active_quest = questId;
-    await update(ref(db, 'users/' + currentUid), { active_quest: questId });
+    if (isDemo) {
+      demoUser.active_quest = questId;
+    } else {
+      await update(ref(db, 'users/' + currentUid), { active_quest: questId });
+    }
     questStartTime = Date.now();
     questClicks = 0;
     startQuestTimer();
@@ -2402,7 +2461,11 @@ var encoded_keys = {
     var user = getCurrentUser();
     if (user.active_quest === questId) {
       user.active_quest = null;
-      await update(ref(db, 'users/' + currentUid), { active_quest: null });
+      if (isDemo) {
+        demoUser.active_quest = null;
+      } else {
+        await update(ref(db, 'users/' + currentUid), { active_quest: null });
+      }
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
       updateCurrentQuest();
@@ -2431,7 +2494,11 @@ var encoded_keys = {
     if (elapsed > quest.timeLimit) {
       alert(t.questTimeExpired);
       user.active_quest = null;
-      await update(ref(db, 'users/' + currentUid), { active_quest: null });
+      if (isDemo) {
+        demoUser.active_quest = null;
+      } else {
+        await update(ref(db, 'users/' + currentUid), { active_quest: null });
+      }
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
       updateCurrentQuest();
@@ -2440,16 +2507,23 @@ var encoded_keys = {
     if (questClicks >= quest.clicksRequired) {
       money += quest.reward;
       internal_level += 500;
-      user.money = money;
-      user.level = internal_level;
-      user.completed_quests.push(quest.id);
-      user.active_quest = null;
-      await update(ref(db, 'users/' + currentUid), {
-        money: money,
-        level: internal_level,
-        completed_quests: user.completed_quests,
-        active_quest: null
-      });
+      if (isDemo) {
+        demoUser.money = money;
+        demoUser.level = internal_level;
+        demoUser.completed_quests.push(quest.id);
+        demoUser.active_quest = null;
+      } else {
+        userData.money = money;
+        userData.level = internal_level;
+        userData.completed_quests.push(quest.id);
+        userData.active_quest = null;
+        await update(ref(db, 'users/' + currentUid), {
+          money: money,
+          level: internal_level,
+          completed_quests: userData.completed_quests,
+          active_quest: null
+        });
+      }
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
       updateMoney();
