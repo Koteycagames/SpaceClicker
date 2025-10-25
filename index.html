@@ -3,210 +3,375 @@
   <title>Clicker</title>
   <meta charset="utf-8">
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-  import {
-    getAuth,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword
-  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-  import {
-    getDatabase,
-    ref,
-    set,
-    get,
-    child,
-    update
-  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
+    // Импорты Firebase
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+    import { getDatabase, ref, set, get, update, child } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js';
 
-  // === Конфигурация Firebase ===
-  const firebaseConfig = {
-    apiKey: "AIzaSyAlYasR91o2zMvD3OYYNFHdoyAAvfkiK80",
-    authDomain: "spaceclicker-78ef5.firebaseapp.com",
-    projectId: "spaceclicker-78ef5",
-    storageBucket: "spaceclicker-78ef5.appspot.com",
-    messagingSenderId: "1007817982727",
-    appId: "1:1007817982727:web:c653b6f656b017cbb73ba2",
-    databaseURL: "https://spaceclicker-78ef5-default-rtdb.firebaseio.com"
-  };
+    // Конфигурация Firebase (замени на свои данные)
+    const firebaseConfig = {
+        apiKey: "your-api-key",
+        authDomain: "your-auth-domain",
+        databaseURL: "your-database-url",
+        projectId: "your-project-id",
+        storageBucket: "your-storage-bucket",
+        messagingSenderId: "your-messaging-sender-id",
+        appId: "your-app-id"
+    };
 
-  // === Инициализация Firebase ===
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getDatabase(app);
+    // Инициализация Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
-  let userData = null; // Кэш данных текущего пользователя
-  let currentUid = null; // UID текущего пользователя
+    // Переменные
+    let currentUid = null;
+    let userData = null;
+    let currentUsername = null;
+    let isDemo = false;
+    let demoUser = { count: 0, money: 0, level: 0, has_small_cookie: 0, equipped_small_cookie: 0, has_medium_cookie: 0, equipped_medium_cookie: 0, has_large_cookie: 0, equipped_large_cookie: 0, is_blocked: 0, achieved_100: 0, achieved_500: 0, achieved_1000: 0, achieved_3000: 0, achieved_5000: 0, achieved_10000: 0, active_quest: null, completed_quests: [] };
+    let questStartTime = Date.now();
+    let questClicks = 0;
+    let currentLanguage = 'en';
+    let translations = {
+        en: { /* твои переводы */ },
+        ru: { /* твои переводы */ }
+    };
+    let quests = [
+        { id: 1, description: "Click 50 times", clicksRequired: 50, reward: 100, timeLimit: 3600 },
+        { id: 2, description: "Click 100 times", clicksRequired: 100, reward: 200, timeLimit: 7200 }
+    ];
 
-  async function getUidByUsername(username) {
-    const usernameRef = ref(db, 'usernames/' + username);
-    const snapshot = await get(usernameRef);
-    if (snapshot.exists()) {
-      return snapshot.val();
-    } else {
-      return null;
-    }
-  }
-
-  async function getUserByUsername(username) {
-    const uid = await getUidByUsername(username);
-    if (!uid) return null;
-    const userRef = ref(db, 'users/' + uid);
-    const snapshot = await get(userRef);
-    if (snapshot.exists()) {
-      return snapshot.val();
-    } else {
-      return null;
-    }
-  }
-
-  function getCurrentUser() {
-    if (isDemo) {
-      return demoUser;
-    }
-    return userData;
-  }
-
-  // === Регистрация ===
-  async function doRegister() {
-    const username = document.getElementById("regUsername").value.trim();
-    const password = document.getElementById("regPassword").value.trim();
-    const t = translations[currentLanguage];
-
-    if (!username || !password) {
-      showMsg("registerMsg", t.enterUsernamePassword, false);
-      return;
-    }
-
-    const email = `${username}@clicker.com`;
-    try {
-      const userCred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
-      await set(ref(db, "users/" + uid), {
-        username,
-        count: 0,
-        money: 0,
-        level: 0,
-        createdAt: new Date().toISOString(),
-        has_small_cookie: 0,
-        equipped_small_cookie: 0,
-        has_medium_cookie: 0,
-        equipped_medium_cookie: 0,
-        has_large_cookie: 0,
-        equipped_large_cookie: 0,
-        is_blocked: 0,
-        achieved_100: 0,
-        achieved_500: 0,
-        achieved_1000: 0,
-        achieved_3000: 0,
-        achieved_5000: 0,
-        achieved_10000: 0,
-        active_quest: null,
-        completed_quests: []
-      });
-      await set(ref(db, "usernames/" + username), uid);
-      showMsg("registerMsg", t.registrationSuccess, true);
-      showLogin();
-    } catch (error) {
-      showMsg("registerMsg", error.message, false);
-      console.error(error);
-    }
-  }
-
-  // === Вход ===
-  async function doLogin() {
-    const username = document.getElementById("loginUsername").value.trim();
-    const password = document.getElementById("loginPassword").value.trim();
-    const t = translations[currentLanguage];
-
-    if (!username || !password) {
-      showMsg("loginMsg", t.enterUsernamePassword, false);
-      return;
-    }
-
-    const email = `${username}@clicker.com`;
-    try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      currentUid = userCred.user.uid;
-
-      const snapshot = await get(child(ref(db), "users/" + currentUid));
-      if (snapshot.exists()) {
-        userData = snapshot.val();
-        if (userData.is_blocked) {
-          showBlocked();
-          return;
+    // Функции
+    function init() {
+        if (location.hash === '#demo') {
+            isDemo = true;
+            showGame('Demo');
+        } else {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    currentUid = user.uid;
+                    getUser(currentUid);
+                    showGame();
+                } else {
+                    document.getElementById('loginMenu').style.display = 'block';
+                    document.getElementById('gameScreen').style.display = 'none';
+                }
+            });
         }
-        currentUsername = userData.username;
-        count = Number(userData.count) || 0;
-        money = Number(userData.money) || 0;
-        internal_level = userData.level || 0;
-        showMsg("loginMsg", t.loginSuccess, true);
-        setTimeout(showLoading, 800);
-      } else {
-        showMsg("loginMsg", t.userNotFound, false);
-      }
-    } catch (error) {
-      showMsg("loginMsg", error.message, false);
-      console.error(error);
     }
-  }
 
-  // === Сохранение прогресса ===
-  async function increment() {
-    if (isPaused) return;
-    let multiplier = 1;
-    if (userData.equipped_small_cookie) multiplier *= 1.5;
-    if (userData.equipped_medium_cookie) multiplier *= 2;
-    if (userData.equipped_large_cookie) multiplier *= 2.5;
-    count += multiplier;
-    internal_level += 1;
-    if (userData.active_quest !== null) {
-      questClicks += multiplier;
-      checkQuestCompletion();
+    async function getUser(uid) {
+        const snapshot = await get(child(ref(db), 'users/' + uid));
+        if (snapshot.exists()) {
+            userData = snapshot.val();
+            currentUsername = userData.username;
+            return userData;
+        }
+        return null;
     }
-    updateCounter();
-    updateLevel();
-    userData.count = count;
-    userData.level = internal_level;
-    checkAchievements(currentUsername);
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await update(ref(db, "users/" + user.uid), {
-          count,
-          money,
-          level: internal_level
+
+    async function getUidByUsername(username) {
+        const snapshot = await get(child(ref(db), 'usernames/' + username));
+        return snapshot.exists() ? snapshot.val() : null;
+    }
+
+    function getCurrentUser() {
+        if (isDemo) {
+            return demoUser || { count: 0, money: 0, level: 0, has_small_cookie: 0, equipped_small_cookie: 0, has_medium_cookie: 0, equipped_medium_cookie: 0, has_large_cookie: 0, equipped_large_cookie: 0, is_blocked: 0, achieved_100: 0, achieved_500: 0, achieved_1000: 0, achieved_3000: 0, achieved_5000: 0, achieved_10000: 0, active_quest: null, completed_quests: [] };
+        }
+        return userData || { count: 0, money: 0, level: 0, has_small_cookie: 0, equipped_small_cookie: 0, has_medium_cookie: 0, equipped_medium_cookie: 0, has_large_cookie: 0, equipped_large_cookie: 0, is_blocked: 0, achieved_100: 0, achieved_500: 0, achieved_1000: 0, achieved_3000: 0, achieved_5000: 0, achieved_10000: 0, active_quest: null, completed_quests: [] };
+    }
+
+    function getUserByUsername(username) {
+        return getUidByUsername(username).then(uid => uid ? getUser(uid) : null);
+    }
+
+    function increment() {
+        var user = getCurrentUser();
+        user.count = (parseFloat(user.count) || 0) + 1;
+        document.getElementById('clicks').innerText = user.count;
+        if (!isDemo) {
+            update(ref(db, 'users/' + currentUid), { count: user.count });
+        }
+        checkQuestCompletion();
+        checkAchievements(currentUsername);
+    }
+
+    async function doRegister() {
+        var email = document.getElementById('registerEmail').value;
+        var password = document.getElementById('registerPassword').value;
+        var username = document.getElementById('registerUsername').value;
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            currentUid = userCredential.user.uid;
+            await set(ref(db, 'users/' + currentUid), { username: username, count: 0, money: 0, level: 0, has_small_cookie: 0, equipped_small_cookie: 0, has_medium_cookie: 0, equipped_medium_cookie: 0, has_large_cookie: 0, equipped_large_cookie: 0, is_blocked: 0, achieved_100: 0, achieved_500: 0, achieved_1000: 0, achieved_3000: 0, achieved_5000: 0, achieved_10000: 0, active_quest: null, completed_quests: [] });
+            await set(ref(db, 'usernames/' + username), currentUid);
+            userData = await getUser(currentUid);
+            currentUsername = username;
+            showGame();
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+
+    async function doLogin() {
+        var email = document.getElementById('loginEmail').value;
+        var password = document.getElementById('loginPassword').value;
+        try {
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            currentUid = userCredential.user.uid;
+            userData = await getUser(currentUid);
+            currentUsername = userData.username;
+            showGame();
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+
+    async function doLogout() {
+        const auth = getAuth();
+        await signOut(auth);
+        if (currentUid) {
+            await update(ref(db, 'users/' + currentUid), { isOnline: false });
+        }
+        currentUid = null;
+        userData = null;
+        currentUsername = null;
+        document.getElementById('loginMenu').style.display = 'block';
+        document.getElementById('gameScreen').style.display = 'none';
+        alert('Вы успешно вышли из аккаунта!');
+    }
+
+    function showGame(target) {
+        document.getElementById('loginMenu').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
+        var user = getCurrentUser();
+        document.getElementById('clicks').innerText = user.count || 0;
+        document.getElementById('money').innerText = user.money || 0;
+        document.getElementById('level').innerText = user.level || 0;
+        updateCurrentQuest();
+    }
+
+    function updateCurrentQuest() {
+        var t = translations[currentLanguage];
+        var user = getCurrentUser();
+        if (user.active_quest === null) {
+            document.getElementById('currentQuest').innerText = t.currentQuestNone;
+        } else {
+            var quest = quests.find(q => q.id === user.active_quest);
+            if (quest) {
+                var remaining = Math.max(0, quest.timeLimit - Math.floor((Date.now() - questStartTime) / 1000));
+                document.getElementById('currentQuest').innerText = t.currentQuest.replace('{clicks}', questClicks).replace('{required}', quest.clicksRequired).replace('{remaining}', remaining);
+            } else {
+                document.getElementById('currentQuest').innerText = t.currentQuestNone;
+            }
+        }
+    }
+
+    function checkQuestCompletion() {
+        var user = getCurrentUser();
+        if (user.active_quest) {
+            var quest = quests.find(q => q.id === user.active_quest);
+            if (quest) {
+                questClicks++;
+                if (questClicks >= quest.clicksRequired) {
+                    user.money = (parseFloat(user.money) || 0) + quest.reward;
+                    user.completed_quests = user.completed_quests || [];
+                    user.completed_quests.push(user.active_quest);
+                    user.active_quest = null;
+                    questClicks = 0;
+                    questStartTime = Date.now();
+                    if (!isDemo) {
+                        update(ref(db, 'users/' + currentUid), { money: user.money, completed_quests: user.completed_quests, active_quest: null });
+                    } else {
+                        demoUser = { ...demoUser, money: user.money, completed_quests: user.completed_quests, active_quest: null };
+                    }
+                    alert('Quest completed! You earned ' + quest.reward + ' money!');
+                }
+            }
+        }
+    }
+
+    function renderInventory() {
+        var t = translations[currentLanguage];
+        var user = getCurrentUser();
+        var content = '<h3>' + t.inventoryTitle + '</h3>';
+        content += '<p>' + t.smallCookie + ': ' + user.has_small_cookie + '</p>';
+        content += '<p>' + t.mediumCookie + ': ' + user.has_medium_cookie + '</p>';
+        content += '<p>' + t.largeCookie + ': ' + user.has_large_cookie + '</p>';
+        content += '<button onclick="closeInventory()">' + t.close + '</button>';
+        document.getElementById('inventoryMenu').innerHTML = content;
+    }
+
+    function showInventory() {
+        document.getElementById('inventoryMenu').style.display = 'block';
+        renderInventory();
+    }
+
+    function renderShop() {
+        var t = translations[currentLanguage];
+        var user = getCurrentUser();
+        var content = '<h3>' + t.shopTitle + '</h3>';
+        content += '<p>' + t.smallCookie + ' - 50 money <button onclick="buyItem(\'small_cookie\')">Buy</button></p>';
+        content += '<p>' + t.mediumCookie + ' - 150 money <button onclick="buyItem(\'medium_cookie\')">Buy</button></p>';
+        content += '<p>' + t.largeCookie + ' - 300 money <button onclick="buyItem(\'large_cookie\')">Buy</button></p>';
+        content += '<button onclick="closeShop()">' + t.close + '</button>';
+        document.getElementById('shopMenu').innerHTML = content;
+    }
+
+    function showShop() {
+        document.getElementById('shopMenu').style.display = 'block';
+        renderShop();
+    }
+
+    function renderQuests() {
+        var t = translations[currentLanguage];
+        var user = getCurrentUser();
+        var content = '<h3>' + t.questsTitle + '</h3>';
+        quests.forEach(function(quest) {
+            var isCompleted = (user.completed_quests || []).includes(quest.id);
+            var isActive = user.active_quest === quest.id;
+            var status = isCompleted ? t.questCompleted : t.questNotCompleted;
+            content += '<p>' + status + ' ' + quest.description + ' reward: ' + quest.reward + ' money</p>';
+            if (!isCompleted) {
+                if (isActive) {
+                    content += '<button onclick="cancelQuest(' + quest.id + ')">' + t.cancelQuest + '</button>';
+                } else {
+                    content += '<button onclick="takeQuest(' + quest.id + ')">' + t.takeQuest + '</button>';
+                }
+            }
+            content += '<br>';
         });
-      } catch (error) {
-        console.error("Ошибка сохранения:", error);
-      }
+        content += '<button onclick="closeQuests()">' + t.close + '</button>';
+        document.getElementById('questsMenu').innerHTML = content;
     }
-  }
 
-  // === Делаем функции доступными ===
-  window.doRegister = doRegister;
-  window.doLogin = doLogin;
-  window.increment = increment;
+    function showQuests() {
+        document.getElementById('questsMenu').style.display = 'block';
+        renderQuests();
+    }
 
-  // ... (предыдущий код остается без изменений до конца модуля)
+    function takeQuest(questId) {
+        var user = getCurrentUser();
+        if (!user.active_quest) {
+            user.active_quest = questId;
+            questClicks = 0;
+            questStartTime = Date.now();
+            if (!isDemo) {
+                update(ref(db, 'users/' + currentUid), { active_quest: questId });
+            } else {
+                demoUser.active_quest = questId;
+            }
+            updateCurrentQuest();
+            showQuests();
+        } else {
+            alert('You already have an active quest!');
+        }
+    }
 
-// === Делаем функции и переменные доступными глобально ===
-window.getCurrentUser = getCurrentUser;
-window.getUserByUsername = getUserByUsername;
-window.userData = userData; // Переменная userData должна быть доступна глобально
-window.currentUid = currentUid; // UID текущего пользователя
+    function cancelQuest(questId) {
+        var user = getCurrentUser();
+        if (user.active_quest === questId) {
+            user.active_quest = null;
+            questClicks = 0;
+            if (!isDemo) {
+                update(ref(db, 'users/' + currentUid), { active_quest: null });
+            } else {
+                demoUser.active_quest = null;
+            }
+            updateCurrentQuest();
+            showQuests();
+        }
+    }
 
-// Добавляем остальные функции, которые используются
-window.showGame = showGame;
-window.checkQuestCompletion = checkQuestCompletion;
-window.checkAchievements = checkAchievements;
-window.renderInventory = renderInventory;
-window.showInventory = showInventory;
-window.renderQuests = renderQuests;
-window.showQuests = showQuests;
-window.renderShop = renderShop;
-window.showShop = showShop;
-window.renderAchievements = renderAchievements;
-window.showAchievements = showAchievements;
+    async function checkAchievements(target) {
+        var t = translations[currentLanguage];
+        var user;
+        if (isDemo && target === 'Demo') {
+            user = demoUser || { count: 0 };
+        } else {
+            user = (target === currentUsername) ? userData : await getUserByUsername(target);
+            if (!user) return;
+        }
+        var userCount = parseFloat(user.count) || 0;
+        var achievements = [
+            { threshold: 100, field: 'achieved_100', name: t.achievement100, amount: 100 },
+            { threshold: 500, field: 'achieved_500', name: t.achievement500, amount: 500 },
+            { threshold: 1000, field: 'achieved_1000', name: t.achievement1000, amount: 1000 },
+            { threshold: 3000, field: 'achieved_3000', name: t.achievement3000, amount: 3000 },
+            { threshold: 5000, field: 'achieved_5000', name: t.achievement5000, amount: 5000 },
+            { threshold: 10000, field: 'achieved_10000', name: t.achievement10000, amount: 10000 }
+        ];
+        var updates = {};
+        achievements.forEach(ach => {
+            if (userCount >= ach.threshold && !user[ach.field]) {
+                updates[ach.field] = 1;
+                if (target === currentUsername) alert(t.achievementUnlocked.replace('{name}', ach.name).replace('{amount}', ach.amount));
+            }
+        });
+        if (Object.keys(updates).length > 0) {
+            if (isDemo && target === 'Demo') {
+                Object.assign(demoUser || {}, updates);
+            } else {
+                var uid = (target === currentUsername) ? currentUid : await getUidByUsername(target);
+                if (uid) await update(ref(db, 'users/' + uid), updates);
+                if (target === currentUsername) {
+                    Object.assign(userData || {}, updates);
+                }
+            }
+        }
+    }
+
+    function renderAchievements() {
+        var t = translations[currentLanguage];
+        var user = getCurrentUser();
+        var content = '<h3>' + t.achievementsTitle + '</h3>';
+        content += '<p>' + (user.achieved_100 ? t.achievement100 + ' (100 clicks)' : t.achievement100Locked) + '</p>';
+        content += '<p>' + (user.achieved_500 ? t.achievement500 + ' (500 clicks)' : t.achievement500Locked) + '</p>';
+        content += '<p>' + (user.achieved_1000 ? t.achievement1000 + ' (1000 clicks)' : t.achievement1000Locked) + '</p>';
+        content += '<p>' + (user.achieved_3000 ? t.achievement3000 + ' (3000 clicks)' : t.achievement3000Locked) + '</p>';
+        content += '<p>' + (user.achieved_5000 ? t.achievement5000 + ' (5000 clicks)' : t.achievement5000Locked) + '</p>';
+        content += '<p>' + (user.achieved_10000 ? t.achievement10000 + ' (10000 clicks)' : t.achievement10000Locked) + '</p>';
+        content += '<button onclick="closeAchievements()">' + t.close + '</button>';
+        document.getElementById('achievementsMenu').innerHTML = content;
+    }
+
+    function showAchievements() {
+        document.getElementById('achievementsMenu').style.display = 'block';
+        renderAchievements();
+    }
+
+    // Закрывающие функции (пример)
+    function closeInventory() { document.getElementById('inventoryMenu').style.display = 'none'; }
+    function closeShop() { document.getElementById('shopMenu').style.display = 'none'; }
+    function closeQuests() { document.getElementById('questsMenu').style.display = 'none'; }
+    function closeAchievements() { document.getElementById('achievementsMenu').style.display = 'none'; }
+
+    // Экспорт в глобальную область
+    window.doRegister = doRegister;
+    window.doLogin = doLogin;
+    window.increment = increment;
+    window.getCurrentUser = getCurrentUser;
+    window.getUserByUsername = getUserByUsername;
+    window.userData = userData;
+    window.currentUid = currentUid;
+    window.showGame = showGame;
+    window.checkQuestCompletion = checkQuestCompletion;
+    window.checkAchievements = checkAchievements;
+    window.renderInventory = renderInventory;
+    window.showInventory = showInventory;
+    window.renderQuests = renderQuests;
+    window.showQuests = showQuests;
+    window.renderShop = renderShop;
+    window.showShop = showShop;
+    window.renderAchievements = renderAchievements;
+    window.showAchievements = showAchievements;
+    window.doLogout = doLogout;
+    window.quests = quests;
+    window.updateCurrentQuest = updateCurrentQuest;
+    window.takeQuest = takeQuest;
+    window.cancelQuest = cancelQuest;
 </script>
 
 
