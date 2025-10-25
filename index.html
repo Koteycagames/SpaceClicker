@@ -186,435 +186,7 @@
   window.doRegister = doRegister;
   window.doLogin = doLogin;
   window.increment = increment;
-</script>
 
-
-
-  <style>
-    html, body {
-      overflow: hidden;  /* Скрывает все полосы прокрутки */
-      margin: 0;         /* Убирает лишние отступы */
-      padding: 0;        /* Убирает padding */
-      height: 100%;      /* Заставляет body занимать весь экран */
-      width: 100%;       /* Заставляет body занимать весь экран */
-      font-family: Arial; 
-      background: #000 url('https://www.transparenttextures.com/patterns/stardust.png'); /* Space background */
-      color: #fff; /* White text for space theme */
-    }
-    .container {
-      width: 320px;
-      margin: 50px auto 0 auto;
-      background: rgba(0, 0, 50, 0.8); /* Dark blue semi-transparent for space feel */
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5); /* Neon glow */
-      position: relative;
-      left: 50px;
-      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out, box-shadow 0.5s ease;
-    }
-    .container:hover {
-      box-shadow: 0 0 30px rgba(0, 255, 255, 0.8); /* Enhanced glow on hover */
-    }
-    .container.fade-in {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    input { 
-      width: 100%; 
-      padding: 8px; 
-      margin: 8px 0; 
-      box-sizing: border-box; 
-      transition: border-color 0.3s, box-shadow 0.3s; 
-      border: 1px solid #00ffff; /* Cyan border */
-      background: rgba(0, 0, 0, 0.5);
-      color: #fff;
-    }
-    input:focus { 
-      border-color: #ff00ff; /* Magenta on focus */
-      box-shadow: 0 0 10px #ff00ff;
-    }
-    button { 
-      padding: 8px 16px; 
-      margin-right: 10px; 
-      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, color 0.3s ease; 
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-      background-color: #4CAF50; /* Default green, but will override for theme */
-      color: white;
-    }
-    button:hover { 
-      transform: scale(1.1) rotate(2deg); /* More animation: scale and rotate */
-      box-shadow: 0 4px 8px rgba(255, 0, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.7); /* Glowing shadow */
-      background-color: #45a049;
-    }
-    button:active {
-      transform: scale(0.95) rotate(-2deg); /* Click animation */
-      box-shadow: 0 0 10px rgba(255, 255, 0, 0.8); /* Yellow flash on click */
-    }
-    #msg { margin-top: 10px; height: 18px; color: red; }
-    .link-button {
-      background: none;
-      border: none;
-      color: #00ffff; /* Cyan for links */
-      text-decoration: underline;
-      cursor: pointer;
-      padding: 0;
-      font-size: 14px;
-      transition: color 0.3s ease, transform 0.3s ease, text-shadow 0.3s ease;
-    }
-    .link-button:hover {
-      color: #ff00ff; /* Magenta on hover */
-      transform: scale(1.1);
-      text-shadow: 0 0 5px #ff00ff;
-    }
-    #loadingScreen {
-      text-align: center;
-      margin-top: 50px;
-      opacity: 0;
-      transition: opacity 0.5s ease-in-out;
-      color: #00ffff; /* Cyan text */
-    }
-    #loadingScreen.visible {
-      opacity: 1;
-    }
-    #gameScreen {
-      text-align: center;
-      margin-top: 100px;
-      position: relative;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-    }
-    #gameScreen.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    #gameScreen button {
-      font-size: 20px;
-      padding: 10px 20px;
-      background-color: #2196F3; /* Blue for space */
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    #gameScreen button:hover {
-      background-color: #0b7dda;
-      transform: scale(1.2) rotate(5deg); /* More dynamic animation */
-      box-shadow: 0 0 15px #00ffff;
-    }
-    #gameScreen button:active {
-      transform: scale(1.0) rotate(-5deg);
-      box-shadow: 0 0 20px #ff00ff;
-    }
-    #shopButton, #inventoryButton, #questsButton {
-      position: absolute;
-      left: 10px;
-      font-size: 16px;
-      padding: 8px 16px;
-      background-color: #FF9800; /* Orange override */
-    }
-    #shopButton {
-      top: 0px;
-    }
-    #inventoryButton {
-      top: 40px;
-    }
-    #questsButton {
-      top: 80px;
-    }
-    #achievementsButton, #promoButton {
-      position: absolute;
-      right: 10px;
-      font-size: 16px;
-      padding: 8px 16px;
-    }
-    #achievementsButton {
-      top: 40px;
-      background-color: #2196F3;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    #achievementsButton:hover {
-      background-color: #0b7dda;
-    }
-    #promoButton {
-      top: 80px;
-      background-color: #2196F3;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    #promoButton:hover {
-      background-color: #0b7dda;
-    }
-    #exitButton {
-      position: absolute;
-      top: 120px;
-      right: 10px;
-      background-color: red;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      padding: 8px 16px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-    #exitButton:hover {
-      background-color: darkred;
-    }
-    #shopMenu, #inventoryMenu, #adminMenu, #issueClicksMenu, #issueCookieMenu, #issueAchievementMenu, #blockedMenu, #achievementsMenu, #promoMenu, #demoExpiredMenu, #consoleMenu, #questsMenu, #settingsMenu {
-      display: none;
-      position: absolute;
-      background: rgba(0, 0, 50, 0.9); /* Space dark blue */
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-      width: 300px;
-      z-index: 3000;
-      cursor: move;
-      opacity: 0;
-      transform: scale(0.95) translateY(-20px);
-      transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.5s ease;
-      color: #fff;
-    }
-    #shopMenu.open, #inventoryMenu.open, #adminMenu.open, #issueClicksMenu.open, #issueCookieMenu.open, #issueAchievementMenu.open, #blockedMenu.open, #achievementsMenu.open, #promoMenu.open, #demoExpiredMenu.open, #consoleMenu.open, #questsMenu.open, #settingsMenu.open {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-      box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
-    }
-    #shopMenu {
-      top: 20%;
-      left: 30%;
-    }
-    #inventoryMenu {
-      top: 20%;
-      left: 50%;
-    }
-    #adminMenu {
-      top: 20%;
-      left: 40%;
-    }
-    #issueClicksMenu, #issueCookieMenu, #issueAchievementMenu, #blockedMenu, #promoMenu, #demoExpiredMenu, #consoleMenu {
-      top: 30%;
-      left: 40%;
-    }
-    #achievementsMenu, #questsMenu, #settingsMenu {
-      top: 20%;
-      left: 40%;
-    }
-    #questsMenu {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-    #shopMenu h3, #inventoryMenu h3, #adminMenu h3, #issueClicksMenu h3, #issueCookieMenu h3, #issueAchievementMenu h3, #blockedMenu h3, #achievementsMenu h3, #promoMenu h3, #demoExpiredMenu h3, #consoleMenu h3, #questsMenu h3, #settingsMenu h3 {
-      margin-top: 0;
-      color: #00ffff; /* Cyan headers */
-      cursor: grab;
-      text-shadow: 0 0 5px #00ffff;
-    }
-    #shopMenu button, #inventoryMenu button, #adminMenu button, #issueClicksMenu button, #issueCookieMenu button, #issueAchievementMenu button, #blockedMenu button, #achievementsMenu button, #promoMenu button, #demoExpiredMenu button, #consoleMenu button, #questsMenu button, #settingsMenu button {
-      font-size: 16px;
-      padding: 8px 16px;
-      margin-top: 10px;
-      background-color: #2196F3;
-      transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    #shopMenu button:hover, #inventoryMenu button:hover, #adminMenu button:hover, #issueClicksMenu button:hover, #issueCookieMenu button:hover, #issueAchievementMenu button:hover, #blockedMenu button:hover, #achievementsMenu button:hover, #promoMenu button:hover, #demoExpiredMenu button:hover, #consoleMenu button:hover, #questsMenu button:hover, #settingsMenu button:hover {
-      transform: scale(1.1) rotate(3deg);
-      box-shadow: 0 0 15px #ff00ff;
-    }
-    #shopMenu button:active, #inventoryMenu button:active, #adminMenu button:active, #issueClicksMenu button:active, #issueCookieMenu button:active, #issueAchievementMenu button:active, #blockedMenu button:active, #achievementsMenu button:active, #promoMenu button:active, #demoExpiredMenu button:active, #consoleMenu button:active, #questsMenu button:active, #settingsMenu button:active {
-      transform: scale(0.9) rotate(-3deg);
-      box-shadow: 0 0 20px #ffff00;
-    }
-    h2 {
-      color: #00ffff;
-      font-size: 24px;
-      transition: color 0.3s ease, text-shadow 0.3s ease;
-      text-shadow: 0 0 5px #00ffff;
-    }
-    h2:hover {
-      color: #ff00ff;
-      text-shadow: 0 0 10px #ff00ff;
-    }
-    #keyContainer {
-      text-align: center;
-      margin-top: 50px;
-      opacity: 1;
-      transform: translateY(0);
-      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-    }
-    #keyContainer.fade-out {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-    #authContainer {
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-    }
-    #authContainer.fade-in {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    #currentQuest {
-      color: #ffff00;
-      font-size: 18px;
-      margin-bottom: 10px;
-    }
-    #pauseOverlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(5px);
-      z-index: 2000;
-      justify-content: center;
-      align-items: center;
-    }
-    #pauseMenu {
-      background: rgba(0, 0, 50, 0.9);
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-      text-align: center;
-      color: #fff;
-    }
-    #pauseMenu button {
-      display: block;
-      margin: 10px auto;
-      width: 200px;
-    }
-  </style>
-</head>
-<body onload="init();">
-  <div id="keyContainer" class="container">
-    <h2 id="enterKeyTitle"></h2>
-    <input type="text" id="inputText" placeholder=""><br><br>
-    <button id="submitKeyButton" onclick="checkKey()"></button><br><br>
-    <button id="exitKeyButton" onclick="window.close()"></button>
-    <div id="demoContainer" style="position: absolute; bottom: 20px; left: 20px;">
-      <button id="demoModeButton" onclick="enterDemoMode()"></button>
-    </div>
-  </div>
-
-  <div class="container" id="authContainer" style="display:none;">
-    <!-- Вход -->
-    <div id="loginScreen">
-      <h3 id="loginTitle"></h3>
-      <input id="loginUsername" type="text" placeholder="" />
-      <input id="loginPassword" type="password" placeholder="" />
-      <div>
-        <button id="loginButton" onclick="doLogin()"></button>
-      </div>
-      <div style="margin-top:10px;">
-        <span id="noAccountText"></span> <button class="link-button" id="registerLink" onclick="showRegister()"></button>
-      </div>
-      <div id="loginMsg"></div>
-    </div>
-
-    <!-- Регистрация -->
-    <div id="registerScreen" style="display:none;">
-      <h3 id="registerTitle"></h3>
-      <input id="regUsername" type="text" placeholder="" />
-      <input id="regPassword" type="password" placeholder="" />
-      <div>
-        <button id="registerButton" onclick="doRegister()"></button>
-        <button id="backButton" onclick="showLogin()"></button>
-      </div>
-      <div id="registerMsg"></div>
-    </div>
-  </div>
-
-  <div id="loadingScreen" style="display:none;">
-    <h2 id="loadingText"></h2>
-  </div>
-
-  <div id="gameScreen" style="display:none;">
-    <button id="shopButton" onclick="showShop()"></button>
-    <button id="inventoryButton" onclick="showInventory()"></button>
-    <button id="questsButton" onclick="showQuests()"></button>
-    <h2 id="level"></h2>
-    <h2 id="counter"></h2>
-    <h2 id="money"></h2>
-    <button id="clickButton" onclick="increment()"></button>
-    <button id="achievementsButton" onclick="showAchievements()"></button>
-    <button id="promoButton" onclick="showPromo()"></button>
-    <button id="exitButton" onclick="doLogout()"></button>
-    <p id="currentQuest"></p>
-  </div>
-
-  <div id="shopMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="inventoryMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="adminMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="issueClicksMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="issueCookieMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="issueAchievementMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="blockedMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="achievementsMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="promoMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="demoExpiredMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="consoleMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="questsMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="settingsMenu">
-    <!-- Dynamic content will be inserted here -->
-  </div>
-
-  <div id="pauseOverlay">
-    <div id="pauseMenu">
-      <h3 id="pauseTitle"></h3>
-      <button id="resumeButton" onclick="resumeGame()"></button>
-      <button id="settingsButton" onclick="showSettings()"></button>
-      <button id="logoutButton" onclick="doLogout()"></button>
-    </div>
-  </div>
-
-<script>
   var currentUsername = '';
   var count = 0;
   var money = 0;
@@ -1060,7 +632,7 @@
       invalidCommand: 'Невідома команда: {command}',
       setClicksSuccess: 'Кліки встановлено на {amount}',
       invalidNumber: 'Невірне число в команді!',
-      invalidFormat: 'Невірний формат команды! Використовуйте {format}',
+      invalidFormat: 'Невірний формат команди! Використовуйте {format}',
       gaveSmallCookie: 'Отримано маленьке печиво!',
       gaveMediumCookie: 'Отримано середнє печиво!',
       gaveLargeCookie: 'Отримано велике печиво!',
@@ -2632,6 +2204,176 @@ var encoded_keys = {
       });
     }
   };
+
+  // Make all necessary functions global for inline onclick
+  window.checkKey = checkKey;
+  window.enterDemoMode = enterDemoMode;
+  window.showRegister = showRegister;
+  window.showLogin = showLogin;
+  window.showShop = showShop;
+  window.showInventory = showInventory;
+  window.showQuests = showQuests;
+  window.showAchievements = showAchievements;
+  window.showPromo = showPromo;
+  window.doLogout = doLogout;
+  window.resumeGame = resumeGame;
+  window.showSettings = showSettings;
+  window.buySmallCookie = buySmallCookie;
+  window.buyMediumCookie = buyMediumCookie;
+  window.buyLargeCookie = buyLargeCookie;
+  window.equipSmallCookie = equipSmallCookie;
+  window.unequipSmallCookie = unequipSmallCookie;
+  window.equipMediumCookie = equipMediumCookie;
+  window.unequipMediumCookie = unequipMediumCookie;
+  window.equipLargeCookie = equipLargeCookie;
+  window.unequipLargeCookie = unequipLargeCookie;
+  window.closeShop = closeShop;
+  window.closeInventory = closeInventory;
+  window.closeAchievements = closeAchievements;
+  window.closePromo = closePromo;
+  window.closeQuests = closeQuests;
+  window.takeQuest = takeQuest;
+  window.cancelQuest = cancelQuest;
+  window.showAdminPanel = showAdminPanel;
+  window.blockAccount = blockAccount;
+  window.unblockAccount = unblockAccount;
+  window.resetCount = resetCount;
+  window.showIssueClicks = showIssueClicks;
+  window.showIssueCookie = showIssueCookie;
+  window.showIssueAchievement = showIssueAchievement;
+  window.confirmIssueClicks = confirmIssueClicks;
+  window.confirmIssueCookie = confirmIssueCookie;
+  window.confirmIssueAchievement = confirmIssueAchievement;
+  window.closeIssueClicks = closeIssueClicks;
+  window.closeIssueCookie = closeIssueCookie;
+  window.closeIssueAchievement = closeIssueAchievement;
+  window.closeAdminPanel = closeAdminPanel;
+  window.toggleConsole = toggleConsole;
+  window.executeConsoleCommand = executeConsoleCommand;
+  window.closeConsole = closeConsole;
+  window.applySettings = applySettings;
+  window.closeSettings = closeSettings;
+  window.redeemPromo = redeemPromo;
+  window.init = init;
 </script>
+</head>
+<body onload="init();">
+  <div id="keyContainer" class="container">
+    <h2 id="enterKeyTitle"></h2>
+    <input type="text" id="inputText" placeholder=""><br><br>
+    <button id="submitKeyButton" onclick="checkKey()"></button><br><br>
+    <button id="exitKeyButton" onclick="window.close()"></button>
+    <div id="demoContainer" style="position: absolute; bottom: 20px; left: 20px;">
+      <button id="demoModeButton" onclick="enterDemoMode()"></button>
+    </div>
+  </div>
+
+  <div class="container" id="authContainer" style="display:none;">
+    <!-- Вход -->
+    <div id="loginScreen">
+      <h3 id="loginTitle"></h3>
+      <input id="loginUsername" type="text" placeholder="" />
+      <input id="loginPassword" type="password" placeholder="" />
+      <div>
+        <button id="loginButton" onclick="doLogin()"></button>
+      </div>
+      <div style="margin-top:10px;">
+        <span id="noAccountText"></span> <button class="link-button" id="registerLink" onclick="showRegister()"></button>
+      </div>
+      <div id="loginMsg"></div>
+    </div>
+
+    <!-- Регистрация -->
+    <div id="registerScreen" style="display:none;">
+      <h3 id="registerTitle"></h3>
+      <input id="regUsername" type="text" placeholder="" />
+      <input id="regPassword" type="password" placeholder="" />
+      <div>
+        <button id="registerButton" onclick="doRegister()"></button>
+        <button id="backButton" onclick="showLogin()"></button>
+      </div>
+      <div id="registerMsg"></div>
+    </div>
+  </div>
+
+  <div id="loadingScreen" style="display:none;">
+    <h2 id="loadingText"></h2>
+  </div>
+
+  <div id="gameScreen" style="display:none;">
+    <button id="shopButton" onclick="showShop()"></button>
+    <button id="inventoryButton" onclick="showInventory()"></button>
+    <button id="questsButton" onclick="showQuests()"></button>
+    <h2 id="level"></h2>
+    <h2 id="counter"></h2>
+    <h2 id="money"></h2>
+    <button id="clickButton" onclick="increment()"></button>
+    <button id="achievementsButton" onclick="showAchievements()"></button>
+    <button id="promoButton" onclick="showPromo()"></button>
+    <button id="exitButton" onclick="doLogout()"></button>
+    <p id="currentQuest"></p>
+  </div>
+
+  <div id="shopMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="inventoryMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="adminMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueClicksMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueCookieMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="issueAchievementMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="blockedMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="achievementsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="promoMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="demoExpiredMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="consoleMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="questsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="settingsMenu">
+    <!-- Dynamic content will be inserted here -->
+  </div>
+
+  <div id="pauseOverlay">
+    <div id="pauseMenu">
+      <h3 id="pauseTitle"></h3>
+      <button id="resumeButton" onclick="resumeGame()"></button>
+      <button id="settingsButton" onclick="showSettings()"></button>
+      <button id="logoutButton" onclick="doLogout()"></button>
+    </div>
+  </div>
+
 </body>
 </html>
