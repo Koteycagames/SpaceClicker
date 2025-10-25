@@ -34,6 +34,38 @@
   const auth = getAuth(app);
   const db = getDatabase(app);
 
+  let userData = null; // Кэш данных текущего пользователя
+  let currentUid = null; // UID текущего пользователя
+
+  async function getUidByUsername(username) {
+    const usernameRef = ref(db, 'usernames/' + username);
+    const snapshot = await get(usernameRef);
+    if (snapshot.exists()) {
+      return snapshot.val();
+    } else {
+      return null;
+    }
+  }
+
+  async function getUserByUsername(username) {
+    const uid = await getUidByUsername(username);
+    if (!uid) return null;
+    const userRef = ref(db, 'users/' + uid);
+    const snapshot = await get(userRef);
+    if (snapshot.exists()) {
+      return snapshot.val();
+    } else {
+      return null;
+    }
+  }
+
+  function getCurrentUser() {
+    if (isDemo) {
+      return demoUser;
+    }
+    return userData;
+  }
+
   // === Регистрация ===
   async function doRegister() {
     const username = document.getElementById("regUsername").value.trim();
@@ -54,8 +86,24 @@
         count: 0,
         money: 0,
         level: 0,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        has_small_cookie: 0,
+        equipped_small_cookie: 0,
+        has_medium_cookie: 0,
+        equipped_medium_cookie: 0,
+        has_large_cookie: 0,
+        equipped_large_cookie: 0,
+        is_blocked: 0,
+        achieved_100: 0,
+        achieved_500: 0,
+        achieved_1000: 0,
+        achieved_3000: 0,
+        achieved_5000: 0,
+        achieved_10000: 0,
+        active_quest: null,
+        completed_quests: []
       });
+      await set(ref(db, "usernames/" + username), uid);
       showMsg("registerMsg", t.registrationSuccess, true);
       showLogin();
     } catch (error) {
@@ -78,15 +126,19 @@
     const email = `${username}@clicker.com`;
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
+      currentUid = userCred.user.uid;
 
-      const snapshot = await get(child(ref(db), "users/" + uid));
+      const snapshot = await get(child(ref(db), "users/" + currentUid));
       if (snapshot.exists()) {
-        const data = snapshot.val();
-        currentUsername = data.username;
-        count = data.count || 0;
-        money = data.money || 0;
-        internal_level = data.level || 0;
+        userData = snapshot.val();
+        if (userData.is_blocked) {
+          showBlocked();
+          return;
+        }
+        currentUsername = userData.username;
+        count = Number(userData.count) || 0;
+        money = Number(userData.money) || 0;
+        internal_level = userData.level || 0;
         showMsg("loginMsg", t.loginSuccess, true);
         setTimeout(showLoading, 800);
       } else {
@@ -100,9 +152,22 @@
 
   // === Сохранение прогресса ===
   async function increment() {
-    count++;
+    if (isPaused) return;
+    let multiplier = 1;
+    if (userData.equipped_small_cookie) multiplier *= 1.5;
+    if (userData.equipped_medium_cookie) multiplier *= 2;
+    if (userData.equipped_large_cookie) multiplier *= 2.5;
+    count += multiplier;
+    internal_level += 1;
+    if (userData.active_quest !== null) {
+      questClicks += multiplier;
+      checkQuestCompletion();
+    }
     updateCounter();
-
+    updateLevel();
+    userData.count = count;
+    userData.level = internal_level;
+    checkAchievements(currentUsername);
     const user = auth.currentUser;
     if (user) {
       try {
@@ -1221,290 +1286,29 @@ var encoded_keys = {
     if (document.getElementById('settingsMenu').style.display === 'block') {
       renderSettings();
     }
-
-    // Update loading text if loading screen visible
-    if (document.getElementById('loadingScreen').style.display !== 'none') {
-      document.getElementById('loadingText').innerText = t.loadingText;
-    }
   }
 
-  function enterDemoMode() {
-    isDemo = true;
-    isInfiniteDemo = false;
-    document.getElementById('keyContainer').classList.add('fade-out');
-    setTimeout(() => {
-      document.getElementById('keyContainer').style.display = 'none';
-      currentUsername = 'Demo';
-      demoUser = {
-        password: 'demo',
-        count: "0",
-        money: "0",
-        has_small_cookie: 0,
-        equipped_small_cookie: 0,
-        has_medium_cookie: 0,
-        equipped_medium_cookie: 0,
-        has_large_cookie: 0,
-        equipped_large_cookie: 0,
-        is_blocked: 0,
-        achieved_100: 0,
-        achieved_500: 0,
-        achieved_1000: 0,
-        achieved_3000: 0,
-        achieved_5000: 0,
-        achieved_10000: 0,
-        internal_level: 0,
-        active_quest: null,
-        completed_quests: []
-      };
-      showLoading();
-    }, 500);
-  }
-
-  function formatDateYMD(d){
-    var y=d.getFullYear();
-    var m=('0'+(d.getMonth()+1)).slice(-2);
-    var day=('0'+d.getDate()).slice(-2);
-    return y+'-'+m+'-'+day;
-  }
-
-function checkKey() {
-  var t = translations[currentLanguage];
-  var input = document.getElementById('inputText').value.trim();
-  var today = new Date();
-  var keyForToday = keys[formatDateYMD(today)];
-
-  // Проверяем, есть ли ключ на сегодня
-  if (!keyForToday) {
-    // Получаем все даты из ключей и сортируем
-    const allDates = Object.keys(keys).sort();
-    const lastDate = allDates[allDates.length - 1];
-    const todayStr = formatDateYMD(today);
-
-    // Если сегодняшняя дата меньше или равна последней — не показываем ошибку
-    if (todayStr <= lastDate) {
-      console.warn(`Ключ для ${todayStr} не найден, но список ключей ещё не закончился (${lastDate})`);
-    } else {
-      // Если уже за пределами последней даты
-      const parts = lastDate.split("-");
-      const formattedLastDate = `${parts[2]}.${parts[1]}.${parts[0]}`;
-      alert(`❗ Ключи закончились! Последний доступный ключ был на ${formattedLastDate}`);
-      return; // ✅ теперь return стоит ВНУТРИ функции
-    }
-  }
-
-  // Проверяем введённый ключ
-  if (input === keyForToday) {
-    alert(t.keyCorrect);
-    document.getElementById('keyContainer').classList.add('fade-out');
-    setTimeout(() => {
-      document.getElementById('keyContainer').style.display = 'none';
-      document.getElementById('authContainer').style.display = 'block';
-      setTimeout(() => {
-        document.getElementById('authContainer').classList.add('fade-in');
-      }, 10);
-    }, 500);
-  } else {
-    alert(t.keyIncorrect);
-  }
-} // 🔥 ← ЭТА ЗАКРЫВАЮЩАЯ СКОБКА ОБЯЗАТЕЛЬНО ДОЛЖНА БЫТЬ
-
-
-
-  function dragElement(el) {
-    var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    var headers = el.getElementsByTagName('h3');
-    var header = headers.length > 0 ? headers[0] : null;
-    if (header) {
-      header.onmousedown = mouseDown;
-    }
-
-    function mouseDown(e) {
-      e = e || window.event;
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      document.onmouseup = stopElementDrag;
-      document.onmousemove = elementDrag;
-    }
-
-    function elementDrag(e) {
-      e = e || window.event;
-      pos1 = pos3 - e.clientX;
-      pos2 = pos4 - e.clientY;
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      el.style.top = (el.offsetTop - pos2) + "px";
-      el.style.left = (el.offsetLeft - pos1) + "px";
-    }
-
-    function stopElementDrag() {
-      document.onmouseup = null;
-      document.onmousemove = null;
-    }
-  }
-
-  var users = {};
-  var currentUsername = '';
-  var count = 0;
-  var money = 0;
-  var internal_level = 0;
-  var quests = [
-    { id: 1, reward: 300, timeLimit: 60, clicksRequired: 500 },
-    { id: 2, reward: 150, timeLimit: 30, clicksRequired: 275 },
-    { id: 3, reward: 400, timeLimit: 90, clicksRequired: 800 },
-    { id: 4, reward: 100, timeLimit: 12, clicksRequired: 100 },
-    { id: 5, reward: 200, timeLimit: 35, clicksRequired: 300 },
-    { id: 6, reward: 50, timeLimit: 23, clicksRequired: 130 },
-    { id: 7, reward: 500, timeLimit: 10, clicksRequired: 100 },
-    { id: 8, reward: 250, timeLimit: 28, clicksRequired: 250 },
-    { id: 9, reward: 500, timeLimit: 110, clicksRequired: 1000 }
-  ];
-  var questStartTime = null;
-  var questClicks = 0;
-  var questTimerInterval = null;
-
-  // Update quest descriptions based on language
-  function updateQuestDescriptions() {
-    var t = translations[currentLanguage];
-    quests.forEach(q => {
-      q.description = t.questDescTemplate.replace('{required}', q.clicksRequired).replace('{time}', q.timeLimit);
-    });
-  }
-
-  function formatInternalLevel(th) {
-    var whole = Math.floor(th / 1000);
-    var frac = th % 1000;
-    if (frac === 0) {
-      return whole.toString();
-    } else {
-      var fracStr = frac.toString().padStart(3, '0').replace(/0+$/, '');
-      return whole + '.' + fracStr;
-    }
-  }
-
-  function getCurrentUser() {
-    return isDemo ? demoUser : users[currentUsername];
-  }
-
-  function trim(str) {
-    return str.replace(/^\s+|\s+$/g, '');
-  }
-
-  function showMsg(elemId, text, success) {
-    var msg = document.getElementById(elemId);
-    msg.style.color = success ? 'green' : 'red';
-    msg.innerText = text;
+  function showMsg(id, msg, success) {
+    var elem = document.getElementById(id);
+    elem.innerText = msg;
+    elem.style.color = success ? 'green' : 'red';
   }
 
   function showRegister() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('registerScreen').style.display = 'block';
-    document.getElementById('regUsername').value = '';
-    document.getElementById('regPassword').value = '';
-    showMsg('registerMsg', '', true);
-    showMsg('loginMsg', '', true);
+    document.getElementById('loginMsg').innerText = '';
   }
 
   function showLogin() {
     document.getElementById('registerScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'block';
-    document.getElementById('loginUsername').value = '';
-    document.getElementById('loginPassword').value = '';
-    showMsg('loginMsg', '', true);
-    showMsg('registerMsg', '', true);
+    document.getElementById('registerMsg').innerText = '';
   }
 
-  function loadUsers() {
-    users = {};
-    try {
-      var storedUsers = localStorage.getItem('clickerUsers');
-      if (storedUsers) {
-        var lines = storedUsers.split('\n');
-        for (var i = 0; i < lines.length; i++) {
-          var line = lines[i];
-          var parts = line.split(":");
-          if (parts.length > 1) {
-            var username = trim(parts[0]);
-            var password = trim(parts[1]);
-            var count = trim(parts[2] || '0');
-            var has_small_cookie = trim(parts[3] || '0');
-            var equipped_small_cookie = trim(parts[4] || '0');
-            var has_medium_cookie = trim(parts[5] || '0');
-            var equipped_medium_cookie = trim(parts[6] || '0');
-            var has_large_cookie = trim(parts[7] || '0');
-            var equipped_large_cookie = trim(parts[8] || '0');
-            var is_blocked = trim(parts[9] || '0');
-            var achieved_100 = trim(parts[10] || '0');
-            var achieved_500 = trim(parts[11] || '0');
-            var achieved_1000 = trim(parts[12] || '0');
-            var achieved_3000 = trim(parts[13] || '0');
-            var achieved_5000 = trim(parts[14] || '0');
-            var achieved_10000 = trim(parts[15] || '0');
-            var money = trim(parts[16] || '0');
-            var level_str = trim(parts[17] || '0');
-            var active_quest = trim(parts[18] || 'null');
-            var completed_quests = trim(parts[19] || '').split(',').filter(id => id !== '').map(id => parseInt(id));
-            var internal_level;
-            if (level_str.includes('.')) {
-              internal_level = Math.round(parseFloat(level_str) * 1000);
-            } else {
-              internal_level = parseInt(level_str, 10) || 0;
-            }
-            if (username !== "" && username !== "Demo") { // Exclude Demo from loading
-              users[username] = {
-                password: password,
-                count: count,
-                money: money,
-                internal_level: internal_level,
-                has_small_cookie: parseInt(has_small_cookie),
-                equipped_small_cookie: parseInt(equipped_small_cookie),
-                has_medium_cookie: parseInt(has_medium_cookie),
-                equipped_medium_cookie: parseInt(equipped_medium_cookie),
-                has_large_cookie: parseInt(has_large_cookie),
-                equipped_large_cookie: parseInt(equipped_large_cookie),
-                is_blocked: parseInt(is_blocked),
-                achieved_100: parseInt(achieved_100),
-                achieved_500: parseInt(achieved_500),
-                achieved_1000: parseInt(achieved_1000),
-                achieved_3000: parseInt(achieved_3000),
-                achieved_5000: parseInt(achieved_5000),
-                achieved_10000: parseInt(achieved_10000),
-                active_quest: active_quest === 'null' ? null : parseInt(active_quest),
-                completed_quests: completed_quests
-              };
-            }
-          }
-        }
-      }
-    } catch(e) {
-      alert("Error loading users: " + e.message);
-    }
-  }
-
-  function writeUsers() {
-    if (isDemo) return; // Do not save in demo mode
-    try {
-      var data = '';
-      for (var username in users) {
-        if (username === 'Demo') continue; // Skip Demo
-        var info = users[username];
-        data += username + ":" + info.password + ":" + info.count + ":" + 
-          info.has_small_cookie + ":" + info.equipped_small_cookie + ":" +
-          info.has_medium_cookie + ":" + info.equipped_medium_cookie + ":" +
-          info.has_large_cookie + ":" + info.equipped_large_cookie + ":" +
-          info.is_blocked + ":" + info.achieved_100 + ":" + info.achieved_500 + ":" + info.achieved_1000 + ":" +
-          info.achieved_3000 + ":" + info.achieved_5000 + ":" + info.achieved_10000 + ":" +
-          info.money + ":" + info.internal_level + ":" + (info.active_quest === null ? 'null' : info.active_quest) + ":" +
-          info.completed_quests.join(',') + "\n";
-      }
-      localStorage.setItem('clickerUsers', data);
-    } catch(e) {
-      alert("Error saving users: " + e.message);
-    }
-  }
-
-  function saveUser(username, password) {
-    users[username] = {
-      password: password,
+  function enterDemoMode() {
+    isDemo = true;
+    demoUser = {
       count: "0",
       money: "0",
       internal_level: 0,
@@ -1524,7 +1328,101 @@ function checkKey() {
       active_quest: null,
       completed_quests: []
     };
-    writeUsers();
+    currentUsername = 'Demo';
+    count = 0;
+    money = 0;
+    internal_level = 0;
+    document.getElementById('keyContainer').classList.add('fade-out');
+    setTimeout(() => {
+      document.getElementById('keyContainer').style.display = 'none';
+      showGame();
+    }, 500);
+  }
+
+  function dragElement(el) {
+    var pos1 = 0,
+      pos2 = 0,
+      pos3 = 0,
+      pos4 = 0;
+    el.querySelector('h3').onpointerdown = function() {
+      dragMouseDown();
+    };
+
+    function dragMouseDown(e) {
+      e = e || window.event;
+      e.preventDefault();
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+
+      document.onpointerup = closeDragElement;
+      document.onpointermove = elementDrag;
+    }
+
+    function elementDrag(e) {
+      e = e || window.event;
+      e.preventDefault();
+      pos1 = pos3 - e.clientX;
+      pos2 = pos4 - e.clientY;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+
+      el.style.top = el.offsetTop - pos2 + 'px';
+      el.style.left = el.offsetLeft - pos1 + 'px';
+    }
+
+    function closeDragElement() {
+      document.onpointerup = null;
+      document.onpointermove = null;
+    }
+  }
+
+  function trim(str) {
+    return str.replace(/^\s+|\s+$/g, '');
+  }
+
+  function checkKey() {
+    var t = translations[currentLanguage];
+    var currentDate = new Date().toISOString().split('T')[0];
+    var enteredKey = trim(document.getElementById('inputText').value);
+    var expectedKey = keys[currentDate];
+    if (!expectedKey) {
+      alert(t.keyNoDate);
+      return;
+    }
+    if (enteredKey === expectedKey) {
+      alert(t.keyCorrect);
+      document.getElementById('keyContainer').classList.add('fade-out');
+      setTimeout(() => {
+        document.getElementById('keyContainer').style.display = 'none';
+        document.getElementById('authContainer').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('authContainer').classList.add('fade-in');
+        }, 10);
+      }, 500);
+    } else {
+      alert(t.keyIncorrect);
+    }
+  }
+
+  var quests = [
+    { id: 1, clicksRequired: 50, timeLimit: 60, reward: 100, description: '' },
+    { id: 2, clicksRequired: 100, timeLimit: 120, reward: 200, description: '' },
+    { id: 3, clicksRequired: 200, timeLimit: 180, reward: 300, description: '' }
+  ];
+
+  var questStartTime = 0;
+  var questClicks = 0;
+  var questTimerInterval = null;
+
+  function updateQuestDescriptions() {
+    var t = translations[currentLanguage];
+    quests.forEach(function(quest) {
+      quest.description = t.questDescTemplate.replace('{required}', quest.clicksRequired).replace('{time}', quest.timeLimit);
+    });
+  }
+
+  function formatInternalLevel(level) {
+    return (level / 100).toFixed(2);
   }
 
   function showLoading() {
@@ -1576,7 +1474,7 @@ function checkKey() {
     if (user) {
       count = parseFloat(user.count) || 0;
       money = parseFloat(user.money) || 0;
-      internal_level = user.internal_level || 0;
+      internal_level = user.level || 0;
       updateCounter();
       updateMoney();
       updateLevel();
@@ -1776,14 +1674,13 @@ function checkKey() {
     setTimeout(() => { document.getElementById('shopMenu').style.display = 'none'; }, 500); // Longer transition
   }
 
-  function buySmallCookie() {
-    var t = translations[currentLanguage];
+  async function buySmallCookie() {
+    const t = translations[currentLanguage];
     if (count >= 300) {
       count -= 300;
-      var user = getCurrentUser();
-      user.count = count.toString();
-      user.has_small_cookie = 1;
-      writeUsers();
+      userData.count = count;
+      userData.has_small_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { count: count, has_small_cookie: 1 });
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1792,14 +1689,13 @@ function checkKey() {
     }
   }
 
-  function buyMediumCookie() {
-    var t = translations[currentLanguage];
+  async function buyMediumCookie() {
+    const t = translations[currentLanguage];
     if (count >= 700) {
       count -= 700;
-      var user = getCurrentUser();
-      user.count = count.toString();
-      user.has_medium_cookie = 1;
-      writeUsers();
+      userData.count = count;
+      userData.has_medium_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { count: count, has_medium_cookie: 1 });
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1808,14 +1704,13 @@ function checkKey() {
     }
   }
 
-  function buyLargeCookie() {
-    var t = translations[currentLanguage];
+  async function buyLargeCookie() {
+    const t = translations[currentLanguage];
     if (count >= 1000) {
       count -= 1000;
-      var user = getCurrentUser();
-      user.count = count.toString();
-      user.has_large_cookie = 1;
-      writeUsers();
+      userData.count = count;
+      userData.has_large_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), { count: count, has_large_cookie: 1 });
       updateCounter();
       alert(t.boughtSuccess);
       renderShop();
@@ -1878,45 +1773,39 @@ function checkKey() {
     setTimeout(() => { document.getElementById('inventoryMenu').style.display = 'none'; }, 500);
   }
 
-  function equipSmallCookie() {
-    var user = getCurrentUser();
-    user.equipped_small_cookie = 1;
-    writeUsers();
+  async function equipSmallCookie() {
+    userData.equipped_small_cookie = 1;
+    await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 1 });
     renderInventory();
   }
 
-  function unequipSmallCookie() {
-    var user = getCurrentUser();
-    user.equipped_small_cookie = 0;
-    writeUsers();
+  async function unequipSmallCookie() {
+    userData.equipped_small_cookie = 0;
+    await update(ref(db, 'users/' + currentUid), { equipped_small_cookie: 0 });
     renderInventory();
   }
 
-  function equipMediumCookie() {
-    var user = getCurrentUser();
-    user.equipped_medium_cookie = 1;
-    writeUsers();
+  async function equipMediumCookie() {
+    userData.equipped_medium_cookie = 1;
+    await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 1 });
     renderInventory();
   }
 
-  function unequipMediumCookie() {
-    var user = getCurrentUser();
-    user.equipped_medium_cookie = 0;
-    writeUsers();
+  async function unequipMediumCookie() {
+    userData.equipped_medium_cookie = 0;
+    await update(ref(db, 'users/' + currentUid), { equipped_medium_cookie: 0 });
     renderInventory();
   }
 
-  function equipLargeCookie() {
-    var user = getCurrentUser();
-    user.equipped_large_cookie = 1;
-    writeUsers();
+  async function equipLargeCookie() {
+    userData.equipped_large_cookie = 1;
+    await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 1 });
     renderInventory();
   }
 
-  function unequipLargeCookie() {
-    var user = getCurrentUser();
-    user.equipped_large_cookie = 0;
-    writeUsers();
+  async function unequipLargeCookie() {
+    userData.equipped_large_cookie = 0;
+    await update(ref(db, 'users/' + currentUid), { equipped_large_cookie: 0 });
     renderInventory();
   }
 
@@ -2002,7 +1891,7 @@ function checkKey() {
     setTimeout(() => { document.getElementById('issueAchievementMenu').style.display = 'none'; }, 500);
   }
 
-  function getTargetUser() {
+  async function getTargetUser() {
     var t = translations[currentLanguage];
     var target = trim(document.getElementById('targetUsername').value);
     if (target === '') {
@@ -2012,23 +1901,24 @@ function checkKey() {
     if (isDemo && target === 'Demo') {
       return 'Demo'; // Special handling for demo
     }
-    if (!users[target]) {
+    const user = await getUserByUsername(target);
+    if (!user) {
       alert(t.userNotFound);
       return null;
     }
     return target;
   }
 
-  function getUser(target) {
+  async function getUser(target) {
     if (isDemo && target === 'Demo') {
       return demoUser;
     }
-    return users[target];
+    return await getUserByUsername(target);
   }
 
-  function confirmIssueClicks() {
+  async function confirmIssueClicks() {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
       var amountStr = document.getElementById('clickAmount').value;
       var amount = parseInt(amountStr);
@@ -2036,195 +1926,144 @@ function checkKey() {
         alert(t.invalidAmount);
         return;
       }
-      var user = getUser(target);
+      var user = await getUser(target);
       var currentCount = parseFloat(user.count) || 0;
-      user.count = (currentCount + amount).toString();
+      var newCount = currentCount + amount;
+      var uid = await getUidByUsername(target);
+      await update(ref(db, 'users/' + uid), { count: newCount });
       checkAchievements(target);
-      writeUsers();
       alert(t.issuedClicks.replace('{amount}', amount).replace('{target}', target));
       if (target === currentUsername) {
-        count = parseFloat(user.count);
+        count = newCount;
         updateCounter();
       }
       closeIssueClicks();
     }
   }
 
-  function confirmIssueCookie(choice) {
+  async function confirmIssueCookie(choice) {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
-      var user = getUser(target);
+      var uid = await getUidByUsername(target);
+      var updates = {};
       if (choice === 1) {
-        user.has_small_cookie = 1;
+        updates.has_small_cookie = 1;
         alert(t.issuedCookieSmall.replace('{target}', target));
       } else if (choice === 2) {
-        user.has_medium_cookie = 1;
+        updates.has_medium_cookie = 1;
         alert(t.issuedCookieMedium.replace('{target}', target));
       } else if (choice === 3) {
-        user.has_large_cookie = 1;
+        updates.has_large_cookie = 1;
         alert(t.issuedCookieLarge.replace('{target}', target));
       }
-      writeUsers();
+      await update(ref(db, 'users/' + uid), updates);
+      if (target === currentUsername) {
+        Object.assign(userData, updates);
+      }
       closeIssueCookie();
     }
   }
 
-  function confirmIssueAchievement(choice) {
+  async function confirmIssueAchievement(choice) {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
-      var user = getUser(target);
+      var uid = await getUidByUsername(target);
+      var updates = {};
       var name;
       if (choice === 1) {
-        user.achieved_100 = 1;
+        updates.achieved_100 = 1;
         name = t.achievement100;
       } else if (choice === 2) {
-        user.achieved_500 = 1;
+        updates.achieved_500 = 1;
         name = t.achievement500;
       } else if (choice === 3) {
-        user.achieved_1000 = 1;
+        updates.achieved_1000 = 1;
         name = t.achievement1000;
       } else if (choice === 4) {
-        user.achieved_3000 = 1;
+        updates.achieved_3000 = 1;
         name = t.achievement3000;
       } else if (choice === 5) {
-        user.achieved_5000 = 1;
+        updates.achieved_5000 = 1;
         name = t.achievement5000;
       } else if (choice === 6) {
-        user.achieved_10000 = 1;
+        updates.achieved_10000 = 1;
         name = t.achievement10000;
       }
+      await update(ref(db, 'users/' + uid), updates);
       alert(t.issuedAchievement.replace('{name}', name).replace('{target}', target));
-      writeUsers();
+      if (target === currentUsername) {
+        Object.assign(userData, updates);
+      }
       closeIssueAchievement();
     }
   }
 
-  function blockAccount() {
+  async function blockAccount() {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
-      var user = getUser(target);
-      user.is_blocked = 1;
-      writeUsers();
+      var uid = await getUidByUsername(target);
+      await update(ref(db, 'users/' + uid), { is_blocked: 1 });
       alert(t.blocked.replace('{target}', target));
     }
   }
 
-  function unblockAccount() {
+  async function unblockAccount() {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
-      var user = getUser(target);
-      user.is_blocked = 0;
-      writeUsers();
+      var uid = await getUidByUsername(target);
+      await update(ref(db, 'users/' + uid), { is_blocked: 0 });
       alert(t.unblocked.replace('{target}', target));
     }
   }
 
-  function resetCount() {
+  async function resetCount() {
     var t = translations[currentLanguage];
-    var target = getTargetUser();
+    var target = await getTargetUser();
     if (target) {
-      var user = getUser(target);
-      user.count = '0';
-      user.achieved_100 = 0;
-      user.achieved_500 = 0;
-      user.achieved_1000 = 0;
-      user.achieved_3000 = 0;
-      user.achieved_5000 = 0;
-      user.achieved_10000 = 0;
-      writeUsers();
+      var uid = await getUidByUsername(target);
+      await update(ref(db, 'users/' + uid), {
+        count: 0,
+        achieved_100: 0,
+        achieved_500: 0,
+        achieved_1000: 0,
+        achieved_3000: 0,
+        achieved_5000: 0,
+        achieved_10000: 0
+      });
       alert(t.clicksReset.replace('{target}', target));
       if (target === currentUsername) {
         count = 0;
+        userData.count = 0;
+        userData.achieved_100 = 0;
+        userData.achieved_500 = 0;
+        userData.achieved_1000 = 0;
+        userData.achieved_3000 = 0;
+        userData.achieved_5000 = 0;
+        userData.achieved_10000 = 0;
         updateCounter();
       }
     }
   }
 
- async function doLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value.trim();
-  const t = translations[currentLanguage];
-
-  if (!username || !password) {
-    showMsg('loginMsg', t.enterUsernamePassword, false);
-    return;
-  }
-
-  try {
-    const email = `${username}@clicker.com`;
-    const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const user = userCredential.user;
-
-    // Загружаем прогресс
-    const userDoc = await getDoc(doc(firebaseDB, "users", user.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      currentUsername = data.username;
-      count = data.count || 0;
-      money = data.money || 0;
-      internal_level = data.level || 0;
-      showMsg('loginMsg', t.loginSuccess, true);
-      showLoading();
-    } else {
-      showMsg('loginMsg', t.userNotFound, false);
-    }
-  } catch (error) {
-    showMsg('loginMsg', t.invalidUsernamePassword, false);
-  }
-}
-
-
-async function doRegister() {
-  const username = document.getElementById('regUsername').value.trim();
-  const password = document.getElementById('regPassword').value.trim();
-  const t = translations[currentLanguage];
-
-  if (!username || !password) {
-    showMsg('registerMsg', t.enterUsernamePassword, false);
-    return;
-  }
-
-  try {
-    const email = `${username}@clicker.com`;
-    const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-    const user = userCredential.user;
-
-    // Создаём профиль игрока
-    await setDoc(doc(firebaseDB, "users", user.uid), {
-      username: username,
-      count: 0,
-      money: 0,
-      level: 0
-    });
-
-    showMsg('registerMsg', t.registrationSuccess, true);
-    setTimeout(showLogin, 1500);
-  } catch (error) {
-    if (error.code === "auth/email-already-in-use") {
-      showMsg('registerMsg', t.userExists, false);
-    } else {
-      showMsg('registerMsg', error.message, false);
-    }
-  }
-}
-
-
-  function doLogout() {
+  async function doLogout() {
     var t = translations[currentLanguage];
-    if (currentUsername && !isDemo && users[currentUsername]) {
-      users[currentUsername].count = count.toString();
-      users[currentUsername].money = money.toString();
-      users[currentUsername].internal_level = internal_level;
-      writeUsers();
+    if (currentUsername && !isDemo) {
+      await update(ref(db, 'users/' + currentUid), {
+        count: count,
+        money: money,
+        level: internal_level
+      });
     }
     currentUsername = '';
     count = 0;
     money = 0;
     internal_level = 0;
+    userData = null;
+    currentUid = null;
     if (questTimerInterval) clearInterval(questTimerInterval);
     if (questUpdateInterval) clearInterval(questUpdateInterval);
     if (demoTimerInterval) clearInterval(demoTimerInterval);
@@ -2249,9 +2088,14 @@ async function doRegister() {
     }
   }
 
-  function checkAchievements(target) {
+  async function checkAchievements(target) {
     var t = translations[currentLanguage];
-    var user = getUser(target);
+    var user;
+    if (isDemo && target === 'Demo') {
+      user = demoUser;
+    } else {
+      user = (target === currentUsername) ? userData : await getUser(target);
+    }
     var userCount = parseFloat(user.count) || 0;
     var achievements = [
       { threshold: 100, field: 'achieved_100', name: t.achievement100, amount: 100 },
@@ -2261,33 +2105,24 @@ async function doRegister() {
       { threshold: 5000, field: 'achieved_5000', name: t.achievement5000, amount: 5000 },
       { threshold: 10000, field: 'achieved_10000', name: t.achievement10000, amount: 10000 }
     ];
+    var updates = {};
     achievements.forEach(ach => {
       if (userCount >= ach.threshold && !user[ach.field]) {
-        user[ach.field] = 1;
+        updates[ach.field] = 1;
         if (target === currentUsername) alert(t.achievementUnlocked.replace('{name}', ach.name).replace('{amount}', ach.amount));
       }
     });
-  }
-
-  function increment() {
-    if (isPaused) return;
-    var user = getCurrentUser();
-    var multiplier = 1;
-    if (user.equipped_small_cookie) multiplier *= 1.5;
-    if (user.equipped_medium_cookie) multiplier *= 2;
-    if (user.equipped_large_cookie) multiplier *= 2.5;
-    count += multiplier;
-    internal_level += 1;
-    if (user.active_quest !== null) {
-      questClicks += multiplier;
-      checkQuestCompletion();
+    if (Object.keys(updates).length > 0) {
+      if (isDemo && target === 'Demo') {
+        Object.assign(demoUser, updates);
+      } else {
+        var uid = (target === currentUsername) ? currentUid : await getUidByUsername(target);
+        await update(ref(db, 'users/' + uid), updates);
+        if (target === currentUsername) {
+          Object.assign(userData, updates);
+        }
+      }
     }
-    updateCounter();
-    updateLevel();
-    user.count = count.toString();
-    user.internal_level = internal_level;
-    checkAchievements(currentUsername);
-    writeUsers();
   }
 
   function showAchievements() {
@@ -2342,27 +2177,28 @@ async function doRegister() {
     setTimeout(() => { document.getElementById('promoMenu').style.display = 'none'; }, 500);
   }
 
-  function redeemPromo() {
+  async function redeemPromo() {
     var t = translations[currentLanguage];
     var code = trim(document.getElementById('promoCode').value).toUpperCase();
-    var user = getCurrentUser();
+    var updates = {};
     if (code === 'LYSUKA') {
-      user.has_small_cookie = 1;
+      updates.has_small_cookie = 1;
       alert(t.promoSmallCookie);
     } else if (code === 'KOT') {
       count += 100;
-      user.count = count.toString();
+      updates.count = count;
       updateCounter();
       checkAchievements(currentUsername);
       alert(t.promo100Clicks);
     } else if (code === 'SUKA') {
-      user.has_large_cookie = 1;
+      updates.has_large_cookie = 1;
       alert(t.promoLargeCookie);
     } else {
       alert(t.invalidPromo);
       return;
     }
-    writeUsers();
+    await update(ref(db, 'users/' + currentUid), updates);
+    Object.assign(userData, updates);
     closePromo();
   }
 
@@ -2394,23 +2230,24 @@ async function doRegister() {
     setTimeout(() => { consoleMenu.style.display = 'none'; }, 500);
   }
 
-  function executeConsoleCommand() {
+  async function executeConsoleCommand() {
     var t = translations[currentLanguage];
     var command = trim(document.getElementById('consoleInput').value).toLowerCase();
     if (command === '') {
       alert(t.enterCommand);
       return;
     }
-    var user = getCurrentUser();
+    var updates = {};
     if (command.startsWith('click:set(')) {
       var match = command.match(/click:set\((\d+)\)/);
       if (match) {
         var amount = parseInt(match[1]);
         if (!isNaN(amount) && amount >= 0) {
           count = amount;
-          user.count = count.toString();
+          updates.count = count;
+          await update(ref(db, 'users/' + currentUid), updates);
+          Object.assign(userData, updates);
           checkAchievements(currentUsername);
-          writeUsers();
           updateCounter();
           alert(t.setClicksSuccess.replace('{amount}', amount));
         } else {
@@ -2420,16 +2257,19 @@ async function doRegister() {
         alert(t.invalidFormat.replace('{format}', 'click:set(число)'));
       }
     } else if (command === 'give:cookie.small') {
-      user.has_small_cookie = 1;
-      writeUsers();
+      updates.has_small_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), updates);
+      Object.assign(userData, updates);
       alert(t.gaveSmallCookie);
     } else if (command === 'give:cookie.medium') {
-      user.has_medium_cookie = 1;
-      writeUsers();
+      updates.has_medium_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), updates);
+      Object.assign(userData, updates);
       alert(t.gaveMediumCookie);
     } else if (command === 'give:cookie.big') {
-      user.has_large_cookie = 1;
-      writeUsers();
+      updates.has_large_cookie = 1;
+      await update(ref(db, 'users/' + currentUid), updates);
+      Object.assign(userData, updates);
       alert(t.gaveLargeCookie);
     } else if (command === 'demomode:exit') {
       if (isDemo) {
@@ -2536,7 +2376,7 @@ async function doRegister() {
     setTimeout(() => { document.getElementById('questsMenu').style.display = 'none'; }, 500);
   }
 
-  function takeQuest(questId) {
+  async function takeQuest(questId) {
     var t = translations[currentLanguage];
     var user = getCurrentUser();
     if (user.active_quest !== null) {
@@ -2544,23 +2384,23 @@ async function doRegister() {
       return;
     }
     user.active_quest = questId;
+    await update(ref(db, 'users/' + currentUid), { active_quest: questId });
     questStartTime = Date.now();
     questClicks = 0;
     startQuestTimer();
     startQuestUpdateInterval();
-    writeUsers();
     updateCurrentQuest();
     closeQuests();
   }
 
-  function cancelQuest(questId) {
+  async function cancelQuest(questId) {
     var t = translations[currentLanguage];
     var user = getCurrentUser();
     if (user.active_quest === questId) {
       user.active_quest = null;
+      await update(ref(db, 'users/' + currentUid), { active_quest: null });
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
-      writeUsers();
       updateCurrentQuest();
       alert(t.questCancelled);
       renderQuests();
@@ -2577,7 +2417,7 @@ async function doRegister() {
     questUpdateInterval = setInterval(updateCurrentQuest, 1000);
   }
 
-  function checkQuestCompletion() {
+  async function checkQuestCompletion() {
     var t = translations[currentLanguage];
     var user = getCurrentUser();
     if (user.active_quest === null) return;
@@ -2587,22 +2427,27 @@ async function doRegister() {
     if (elapsed > quest.timeLimit) {
       alert(t.questTimeExpired);
       user.active_quest = null;
+      await update(ref(db, 'users/' + currentUid), { active_quest: null });
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
-      writeUsers();
       updateCurrentQuest();
       return;
     }
     if (questClicks >= quest.clicksRequired) {
       money += quest.reward;
       internal_level += 500;
-      user.money = money.toString();
-      user.internal_level = internal_level;
+      user.money = money;
+      user.level = internal_level;
       user.completed_quests.push(quest.id);
       user.active_quest = null;
+      await update(ref(db, 'users/' + currentUid), {
+        money: money,
+        level: internal_level,
+        completed_quests: user.completed_quests,
+        active_quest: null
+      });
       if (questTimerInterval) clearInterval(questTimerInterval);
       if (questUpdateInterval) clearInterval(questUpdateInterval);
-      writeUsers();
       updateMoney();
       updateLevel();
       updateCurrentQuest();
@@ -2697,20 +2542,16 @@ async function doRegister() {
     setTimeout(() => { document.getElementById('settingsMenu').style.display = 'none'; }, 500);
   }
 
-  // Load users at start
-  loadUsers();
-
-  // Add Admin account if not exists
-  if (!users["Admin"]) {
-    saveUser("Admin", atob('enV5MjI4'));
-  }
-
   // Update quest descriptions
   updateQuestDescriptions();
 
-  window.onbeforeunload = function() {
-    if (currentUsername && !isDemo && users[currentUsername]) {
-      writeUsers();
+  window.onbeforeunload = async function() {
+    if (currentUsername && !isDemo) {
+      await update(ref(db, 'users/' + currentUid), {
+        count: count,
+        money: money,
+        level: internal_level
+      });
     }
   };
 </script>
